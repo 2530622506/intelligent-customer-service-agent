@@ -186,9 +186,10 @@ async def stream_run(
             ])
             for event_id, (event_type, data) in enumerate(sequence, 1):
                 if await request.is_disconnected():
-                    return
+                    break
                 yield _format_sse(event_id, event_type, conversation_id, run.turn_id, run.id, data)
                 await asyncio.sleep(0)
+            # 客户端断开只停止网络输出，不丢弃已经完成的 Agent 结果。
             async with session_factory() as write_session:
                 stored_run = await write_session.get(AgentRun, run_id, with_for_update=True)
                 if stored_run and stored_run.status != "completed":
