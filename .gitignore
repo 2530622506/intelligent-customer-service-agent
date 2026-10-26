@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+*.egg-info/
+
+# Node
+node_modules/
+dist/
+.vite/
+.turbo/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+!.env.test.example
+*.pem
+*.key
+*.crt
+
+# Runtime data and local services
+volumes/
+data/
+logs/
+coverage/
+.cache/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+*.swp
+
+# Local generated fixtures and reports
+fixtures/generated/
+reports/
