@@ -20,3 +20,39 @@ export function readCsrfToken(): string | null {
     .find((value) => value.startsWith('csa_csrf_token='))
   return item ? decodeURIComponent(item.split('=').slice(1).join('=')) : null
 }
+
+export interface SessionView {
+  id: string
+  title: string | null
+  channel: string
+  status: string
+}
+
+export interface RunView {
+  id: string
+  turn_id: string
+  status: string
+}
+
+export async function login(username: string, password: string) {
+  return apiRequest<{ user: { display_name: string; roles: string[] }; csrf_token: string }>('/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ username, password }),
+  })
+}
+
+export async function createConversation(title: string) {
+  return apiRequest<SessionView>('/conversations', {
+    method: 'POST',
+    headers: { 'X-CSRF-Token': readCsrfToken() ?? '' },
+    body: JSON.stringify({ title }),
+  })
+}
+
+export async function createRun(conversationId: string, message: string) {
+  return apiRequest<RunView>(`/conversations/${conversationId}/runs`, {
+    method: 'POST',
+    headers: { 'X-CSRF-Token': readCsrfToken() ?? '' },
+    body: JSON.stringify({ message }),
+  })
+}
