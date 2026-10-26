@@ -1,4 +1,5 @@
 from functools import lru_cache
+from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -10,6 +11,11 @@ class Settings(BaseSettings):
     app_port: int = 8000
     app_secret_key: str = "change-me-in-local-env"
     readiness_strict: bool = False
+    jwt_access_expires_seconds: int = 900
+    jwt_refresh_expires_seconds: int = 604800
+    auth_cookie_secure: bool = False
+    auth_cookie_samesite: Literal["lax", "strict", "none"] = "lax"
+    auth_cookie_domain: str | None = None
 
     database_url: str = "postgresql+asyncpg://app:app@localhost:5432/customer_service"
     redis_url: str = "redis://localhost:6379/0"

@@ -57,6 +57,18 @@ class UserRole(Base):
     )
 
 
+class RefreshSession(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "refresh_session"
+
+    user_id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True), ForeignKey("app_user.id", ondelete="CASCADE"), nullable=False
+    )
+    token_jti: Mapped[str] = mapped_column(String(128), unique=True, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    rotated_to_jti: Mapped[str | None] = mapped_column(String(128))
+
+
 class RolePermission(Base):
     __tablename__ = "role_permission"
 
