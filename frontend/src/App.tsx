@@ -2,12 +2,14 @@ import { FormEvent, useState } from 'react'
 import { CircleStop, LogIn, Send, ShieldCheck } from 'lucide-react'
 import { claimHandoff, createConversation, createRun, handoffQueue, login, resolveHandoff, type HandoffTaskView } from './lib/api'
 import { useAgentStream } from './hooks/use-agent-stream'
+import OperationsPanel from './components/OperationsPanel'
 
 function App() {
   const [username, setUsername] = useState('demo-customer')
   const [password, setPassword] = useState('demo123456')
   const [signedIn, setSignedIn] = useState(false)
   const [roles, setRoles] = useState<string[]>([])
+  const [operations, setOperations] = useState(false)
   const [queue, setQueue] = useState<HandoffTaskView[]>([])
   const [conversationId, setConversationId] = useState<string | null>(null)
   const [input, setInput] = useState('')
@@ -23,6 +25,7 @@ function App() {
       const conversation = await createConversation('售后助手')
       setConversationId(conversation.id)
       setSignedIn(true)
+      setOperations(user.user.roles.some((role) => ['supervisor', 'admin'].includes(role)))
     } catch (loginError) {
       setError(loginError instanceof Error ? loginError.message : '登录失败')
     }
@@ -85,6 +88,7 @@ function App() {
         <div className="mx-auto flex max-w-6xl items-center justify-between"><div><p className="text-xs font-medium uppercase tracking-[0.2em] text-cyan-300">Customer Service Agent</p><h1 className="mt-1 text-lg font-semibold">{staffMode ? '客服工作台' : '售后助手'}</h1></div><span className="rounded-full border border-emerald-400/30 px-3 py-1 text-xs text-emerald-300">{staffMode ? roles.join(' / ') : '客户模式'}</span></div>
       </header>
       <section className="mx-auto flex min-h-[calc(100vh-81px)] max-w-6xl flex-col px-6 py-8">
+        {operations ? <div className="mb-5"><OperationsPanel /></div> : null}
         {staffMode ? <section className="mb-5 rounded-2xl border border-slate-800 bg-slate-900/60 p-5"><div className="flex items-center justify-between"><div><h2 className="font-semibold">人工队列</h2><p className="mt-1 text-sm text-slate-400">服务端按角色和 DataScope 返回可处理任务。</p></div><button className="rounded-lg border border-slate-700 px-3 py-2 text-sm hover:border-cyan-400" onClick={() => void refreshQueue()}>刷新队列</button></div><div className="mt-4 space-y-3">{queue.length === 0 ? <p className="text-sm text-slate-500">暂无待处理会话，点击刷新查看最新状态。</p> : queue.map((task) => <div className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950/60 p-4" key={task.id}><div><p className="text-sm font-medium">{task.reason}</p><p className="mt-1 text-xs text-slate-500">{task.status} · 风险 {task.riskLevel}</p></div><div className="flex gap-2">{task.status === 'queued' ? <button className="rounded-lg bg-cyan-400 px-3 py-2 text-sm font-medium text-slate-950" onClick={() => void handleClaim(task.id)}>接管</button> : null}{task.status === 'human_active' ? <button className="rounded-lg border border-emerald-400/40 px-3 py-2 text-sm text-emerald-300" onClick={() => void handleResolve(task.id)}>解决</button> : null}</div></div>)}</div></section> : null}
         <div className="flex-1 rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
           <div className="flex items-center justify-between border-b border-slate-800 pb-4"><div><h2 className="font-semibold">今天需要什么帮助？</h2><p className="mt-1 text-sm text-slate-400">答案会展示 Agent 处理状态和可追溯依据。</p></div><span className="text-xs text-slate-500">{state.status}</span></div>

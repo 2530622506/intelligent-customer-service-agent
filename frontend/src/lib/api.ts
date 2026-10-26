@@ -83,3 +83,49 @@ export async function resolveHandoff(taskId: string) {
     headers: { 'X-CSRF-Token': readCsrfToken() ?? '' },
   })
 }
+
+export interface KnowledgeEntityView {
+  id: string
+  name: string
+  entity_type: string
+  status: string
+  description: string | null
+}
+
+export interface EvaluationDatasetView {
+  id: string
+  name: string
+  description: string | null
+  status: string
+}
+
+export async function listKnowledgeEntities() {
+  return apiRequest<KnowledgeEntityView[]>('/knowledge/entities')
+}
+
+export async function createKnowledgeEntity(name: string, entityType: string) {
+  return apiRequest<KnowledgeEntityView>('/knowledge/entities', {
+    method: 'POST',
+    headers: { 'X-CSRF-Token': readCsrfToken() ?? '' },
+    body: JSON.stringify({ name, entity_type: entityType }),
+  })
+}
+
+export async function publishKnowledgeEntity(id: string) {
+  return apiRequest<KnowledgeEntityView>(`/knowledge/entities/${id}/publish`, {
+    method: 'POST',
+    headers: { 'X-CSRF-Token': readCsrfToken() ?? '' },
+  })
+}
+
+export async function listEvaluationDatasets() {
+  return apiRequest<EvaluationDatasetView[]>('/evaluations/datasets')
+}
+
+export async function createEvaluationDataset(name: string) {
+  return apiRequest<EvaluationDatasetView>('/evaluations/datasets', {
+    method: 'POST',
+    headers: { 'X-CSRF-Token': readCsrfToken() ?? '' },
+    body: JSON.stringify({ name }),
+  })
+}
