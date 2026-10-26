@@ -97,3 +97,37 @@ async def resolve_handoff(
     except WorkflowPermissionError as error:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(error)) from error
     return _task_view(task)
+
+
+@router.post("/conversations/{conversation_id}/actions/preview", dependencies=[Depends(require_csrf)])
+async def preview_action(
+    conversation_id: UUID,
+    payload: ActionPreviewRequest,
+    principal: Annotated[AuthPrincipal, Depends(get_principal)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, object]:
+    approval = await HandoffApprovalService().create_action_preview(
+        session, conversation_id, principal.user_id, payload.action_id, payload.idempotency_key, payload.payload
+    )
+    return {"approvalId": str(approval.id), "actionId": approval.action_id, "status": approval.status}
+
+
+@router.post("/actions/{approval_id}/confirm", dependencies=[Depends(require_csrf)])
+async def confirm_action(
+    approval_id: UUID,
+    principal: Annotated[AuthPrincipal, Depends(get_principal)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, object]:
+    approval = await HandoffApprovalService().confirm_action(session, approval_id, principal.user_id)
+    return {"approvalId": str(approval.id), "status": approval.status, "userConfirmed": True}
+
+
+@router.post("/actions/{approval_id}/approve", dependencies=[Depends(require_csrf)])
+async def approve_action(
+    approval_id: UUID,
+    payload: ApprovalNote,
+    principal: Annotated[AuthPrincipal, Depends(get_principal)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, object]:
+    execution = await HandoffApprovalService().approve_action(session, approval_id, principal, payload.note)
+    return {"approvalId": str(approval_id), "executionStatus": execution.status, "result": execution.result}
