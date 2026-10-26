@@ -9,7 +9,8 @@ class Settings(BaseSettings):
     app_env: str = "development"
     app_host: str = "0.0.0.0"
     app_port: int = 8000
-    app_secret_key: str = "change-me-in-local-env"
+    # 开发默认值仅用于本地占位；部署前必须通过 APP_SECRET_KEY 注入随机长密钥。
+    app_secret_key: str = "change-me-in-local-env-with-at-least-32-bytes"
     readiness_strict: bool = False
     jwt_access_expires_seconds: int = 900
     jwt_refresh_expires_seconds: int = 604800

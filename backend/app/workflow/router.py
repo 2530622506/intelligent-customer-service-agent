@@ -1,5 +1,5 @@
 from typing import Annotated
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth.dependencies import get_principal, require_csrf
 from app.auth.types import AuthPrincipal, RoleCode
 from app.db.base import get_db
-from app.models import HandoffTask
+from app.models import ConversationMessage, HandoffTask
 from app.workflow.service import HandoffApprovalService, WorkflowPermissionError
 
 router = APIRouter(prefix="/workflow", tags=["workflow"])
@@ -29,6 +29,11 @@ class ActionPreviewRequest(BaseModel):
 
 class ApprovalNote(BaseModel):
     note: str = Field(default="", max_length=500)
+
+
+class StaffMessage(BaseModel):
+    content: str = Field(min_length=1, max_length=4000)
+    internal: bool = False
 
 
 def _task_view(task: HandoffTask) -> dict[str, object]:
@@ -96,6 +101,46 @@ async def resolve_handoff(
         task = await HandoffApprovalService().resolve_handoff(session, task_id, principal)
     except WorkflowPermissionError as error:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(error)) from error
+    return _task_view(task)
+
+
+@router.post("/handoff/{task_id}/message", dependencies=[Depends(require_csrf)])
+async def staff_message(
+    task_id: UUID,
+    payload: StaffMessage,
+    principal: Annotated[AuthPrincipal, Depends(get_principal)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, object]:
+    task = await session.get(HandoffTask, task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="人工任务不存在")
+    if task.assigned_user_id != principal.user_id:
+        raise HTTPException(status_code=403, detail="不是该人工任务的处理人")
+    if task.status != "human_active":
+        raise HTTPException(status_code=409, detail="会话不在人工处理中")
+    message = ConversationMessage(
+        conversation_id=task.conversation_id,
+        turn_id=uuid4(),
+        author_type="internal_note" if payload.internal else "staff",
+        actor_id=principal.user_id,
+        content=payload.content,
+        status="completed",
+    )
+    session.add(message)
+    await session.commit()
+    return {"messageId": str(message.id), "authorType": message.author_type, "status": "completed"}
+
+
+@router.post("/handoff/{task_id}/resume-agent", dependencies=[Depends(require_csrf)])
+async def resume_agent(
+    task_id: UUID,
+    principal: Annotated[AuthPrincipal, Depends(get_principal)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, object]:
+    try:
+        task = await HandoffApprovalService().resume_agent(session, task_id, principal)
+    except WorkflowPermissionError as error:
+        raise HTTPException(status_code=403, detail=str(error)) from error
     return _task_view(task)
 
 
