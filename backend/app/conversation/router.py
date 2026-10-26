@@ -26,6 +26,7 @@ from app.core.config import Settings, get_settings
 from app.db.base import get_db, session_factory
 from app.models import AgentRun, Conversation, ConversationMessage
 from app.observability.tracing import AgentTracer
+from app.retrieval.rag_answer import PolicyRAGService
 
 router = APIRouter(prefix="/conversations", tags=["conversations"])
 
@@ -168,12 +169,21 @@ async def stream_run(
         try:
             result = runtime.invoke(question, str(run.id))
             answer = _answer(result)
-            sequence = [
+            sequence: list[tuple[str, Mapping[str, object]]] = [
                 ("run_started", {"status": "running"}),
                 ("agent_step", {"node": "supervisor_plan", "status": "completed"}),
+            ]
+            plan = result.get("plan")
+            selected_agents = plan.get("agents", []) if isinstance(plan, dict) else []
+            rag = await PolicyRAGService(settings).answer(question) if "policy" in selected_agents else None
+            if rag:
+                sequence.append(("retrieval", {"candidateCount": len(rag.citations)}))
+                sequence.extend(("citation", citation) for citation in rag.citations)
+                answer = rag.answer
+            sequence.extend([
                 ("token", {"text": answer}),
                 ("done", {"status": "completed"}),
-            ]
+            ])
             for event_id, (event_type, data) in enumerate(sequence, 1):
                 if await request.is_disconnected():
                     return

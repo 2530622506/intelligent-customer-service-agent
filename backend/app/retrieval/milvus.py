@@ -66,6 +66,11 @@ class MilvusIndex:
         self.client.insert(collection_name=self.collection_name, data=rows)
         self.client.flush(self.collection_name)
 
+    def delete_version(self, version_id: str) -> None:
+        if not self.client.has_collection(self.collection_name):
+            return
+        self.client.delete(self.collection_name, filter=f'version_id == "{version_id}"')
+
     def hybrid_search(self, query: str, vector: list[float], limit: int = 20) -> list[SearchHit]:
         self.ensure_collection()
         dense = AnnSearchRequest(

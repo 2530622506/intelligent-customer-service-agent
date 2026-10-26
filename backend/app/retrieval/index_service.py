@@ -31,6 +31,8 @@ class KnowledgeIndexService:
             version.document_id,
             version.id,
         )
+        # 重建前先清理同一版本的旧索引，保证脚本可重复运行且不会重复召回。
+        self.milvus.delete_version(str(version.id))
         await self.session.execute(delete(KnowledgeChunk).where(KnowledgeChunk.version_id == version.id))
         chunks = [
             KnowledgeChunk(
