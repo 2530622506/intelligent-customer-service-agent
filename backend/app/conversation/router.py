@@ -16,8 +16,9 @@ from app.agent.runtime import ControlledAgentRuntime
 from app.auth.dependencies import get_principal, require_csrf
 from app.auth.policy import scope_for_roles
 from app.auth.types import AuthPrincipal, RoleCode
-from app.business.agents import OrderLogisticsAgent
+from app.business.agents import OrderLogisticsAgent, TroubleshootingAgent
 from app.business.mock_data import MockAfterSalesData
+from app.business.schemas import TroubleshootingState
 from app.business.tools import MockLogisticsTool, MockOrderTool, ToolPolicyError
 from app.conversation.schemas import (
     ConversationView,
@@ -188,6 +189,9 @@ async def stream_run(
             if "order_logistics" in selected_agents:
                 answer, order_events = _order_result(question, principal.user_id)
                 sequence.extend(order_events)
+            if "troubleshooting" in selected_agents:
+                answer, troubleshooting_events = _troubleshooting_result(question)
+                sequence.extend(troubleshooting_events)
             sequence.extend([
                 ("token", {"text": answer}),
                 ("done", {"status": "completed"}),
@@ -270,3 +274,21 @@ def _order_result(question: str, customer_id: UUID) -> tuple[str, list[tuple[str
             ("tool_result", {"tool": "order_logistics", "status": "ok", "orderNo": order_no}),
         ],
     )
+
+
+def _troubleshooting_result(question: str) -> tuple[str, list[tuple[str, dict[str, object]]]]:
+    state = TroubleshootingState(
+        product_model="C1" if "摄像机" in question or "C1" in question else None,
+        symptom=question if any(keyword in question for keyword in ("故障", "坏", "无法", "开机", "维修")) else None,
+        attempted_steps=[step for step in ("重启", "换电源", "维修") if step in question],
+    )
+    next_state = TroubleshootingAgent().next_step(state)
+    if next_state.escalation_required:
+        return "基础排查仍未解决，建议转人工客服创建维修工单。", [
+            ("tool_result", {"tool": "troubleshooting", "status": "escalation_required"}),
+            ("handoff", {"reason": "基础排查未解决", "riskLevel": "normal"}),
+        ]
+    return next_state.next_question or "请补充产品型号和故障现象。", [
+        ("tool_call", {"tool": "troubleshooting", "status": "collecting_slots"}),
+        ("tool_result", {"tool": "troubleshooting", "status": "needs_input"}),
+    ]
