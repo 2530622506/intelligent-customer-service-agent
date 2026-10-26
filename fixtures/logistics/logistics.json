@@ -1,0 +1,5 @@
+[
+  {"orderNo":"CS202610270001","trackingNo":"SF10000001","status":"运输中","location":"上海转运中心"},
+  {"orderNo":"CS202610270002","trackingNo":"SF10000002","status":"已签收","location":"上海市浦东新区"},
+  {"orderNo":"CS202610270003","trackingNo":"SF10000003","status":"异常停滞","location":"杭州分拨中心"}
+]

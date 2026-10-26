@@ -1,0 +1,5 @@
+[
+  {"orderNo":"CS202610270001","customerKey":"customer-001","status":"shipping","productName":"云台摄像机 C1","amountCents":29900},
+  {"orderNo":"CS202610270002","customerKey":"customer-001","status":"delivered","productName":"智能门铃 D2","amountCents":18900},
+  {"orderNo":"CS202610270003","customerKey":"customer-002","status":"after_sale","productName":"室内传感器 S1","amountCents":9900}
+]

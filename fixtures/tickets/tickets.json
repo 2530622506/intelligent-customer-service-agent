@@ -1,0 +1,5 @@
+[
+  {"ticketNo":"TK-DEMO-001","category":"logistics","status":"open","priority":"normal","summary":"物流异常待承运商反馈"},
+  {"ticketNo":"TK-DEMO-002","category":"repair","status":"in_progress","priority":"high","summary":"云台摄像机无法开机"},
+  {"ticketNo":"TK-DEMO-003","category":"refund","status":"pending_approval","priority":"high","summary":"高风险退款动作待主管审批"}
+]

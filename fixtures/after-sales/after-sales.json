@@ -1,0 +1,5 @@
+[
+  {"orderNo":"CS202610270001","type":"logistics_exception","status":"open","summary":"物流超过 48 小时未更新"},
+  {"orderNo":"CS202610270002","type":"return","status":"pending_review","summary":"客户申请无理由退货"},
+  {"orderNo":"CS202610270003","type":"repair","status":"in_progress","summary":"设备无法开机，等待维修检测"}
+]
