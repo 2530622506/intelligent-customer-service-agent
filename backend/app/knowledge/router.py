@@ -105,3 +105,30 @@ async def create_relation(
     await session.commit()
     await session.refresh(relation)
     return RelationView(id=str(relation.id), source_entity_id=str(relation.source_entity_id), target_entity_id=str(relation.target_entity_id), relation_type=relation.relation_type, status=relation.status)
+
+
+@router.post("/relations/{relation_id}/publish", response_model=RelationView, dependencies=[Depends(require_csrf)])
+async def publish_relation(
+    relation_id: UUID,
+    principal: Annotated[AuthPrincipal, Depends(get_principal)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> RelationView:
+    require_knowledge_write(principal)
+    relation = await session.get(GraphRelation, relation_id, with_for_update=True)
+    if not relation:
+        raise HTTPException(status_code=404, detail="关系不存在")
+    source = await session.get(GraphEntity, relation.source_entity_id)
+    target = await session.get(GraphEntity, relation.target_entity_id)
+    if not source or not target or source.status != "published" or target.status != "published":
+        raise HTTPException(status_code=409, detail="关系两端实体必须先发布")
+    relation.status = "published"
+    relation.version += 1
+    await session.commit()
+    try:
+        graph = Neo4jGraph(settings)
+        await graph.upsert_relation(relation.id, relation.source_entity_id, relation.target_entity_id, relation.relation_type)
+        await graph.close()
+    except Exception as error:  # noqa: BLE001
+        logger.warning("Neo4j 关系投影暂不可用，保留 PostgreSQL 发布状态：%s", error)
+    return RelationView(id=str(relation.id), source_entity_id=str(relation.source_entity_id), target_entity_id=str(relation.target_entity_id), relation_type=relation.relation_type, status=relation.status)
