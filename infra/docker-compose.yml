@@ -161,6 +161,27 @@ services:
       timeout: 5s
       retries: 20
 
+  worker:
+    build:
+      context: ../backend
+    command: ["python", "scripts/run_worker.py"]
+    environment:
+      APP_ENV: development
+      DATABASE_URL: postgresql+asyncpg://app:app@postgres:5432/customer_service
+      REDIS_URL: redis://redis:6379/0
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      MILVUS_URI: http://milvus:19530
+      NEO4J_URI: bolt://neo4j:7687
+      RUSTFS_ENDPOINT: http://rustfs:9000
+      MINERU_API_KEY: ${MINERU_API_KEY:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      rustfs:
+        condition: service_healthy
+
   frontend:
     build:
       context: ../frontend

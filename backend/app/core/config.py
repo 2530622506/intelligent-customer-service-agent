@@ -23,6 +23,17 @@ class Settings(BaseSettings):
     milvus_uri: str = "http://localhost:19530"
     neo4j_uri: str = "bolt://localhost:7687"
     rustfs_endpoint: str = "http://localhost:9000"
+    rustfs_access_key: str = "rustfsadmin"
+    rustfs_secret_key: str = "rustfsadmin"
+    rustfs_bucket: str = "customer-service"
+    mineru_api_key: str = ""
+    mineru_base_url: str = "https://mineru.net"
+    mineru_model_version: str = "vlm"
+    mineru_language: str = "ch"
+    mineru_enable_formula: bool = True
+    mineru_enable_table: bool = True
+    mineru_poll_interval_ms: int = 3000
+    mineru_poll_timeout_ms: int = 600000
 
     cors_origins: str = "http://localhost:5173,http://localhost:55173"
 

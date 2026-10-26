@@ -25,7 +25,7 @@ def test_role_policy_generates_server_side_scope() -> None:
 
 
 def test_refresh_and_access_tokens_have_distinct_types() -> None:
-    settings = Settings(app_secret_key="unit-test-secret")
+    settings = Settings(app_secret_key="unit-test-secret-with-at-least-32-bytes")
     user_id = uuid4()
     access, _, _ = create_token(user_id, "access", settings, 60)
     refresh, _, _ = create_token(user_id, "refresh", settings, 60)
