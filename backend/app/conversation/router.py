@@ -25,6 +25,7 @@ from app.conversation.schemas import (
 from app.core.config import Settings, get_settings
 from app.db.base import get_db, session_factory
 from app.models import AgentRun, Conversation, ConversationMessage
+from app.observability.tracing import AgentTracer
 
 router = APIRouter(prefix="/conversations", tags=["conversations"])
 
@@ -163,7 +164,7 @@ async def stream_run(
 
     async def events() -> AsyncIterator[str]:
         planner = QwenSupervisorPlanner(settings) if settings.dashscope_api_key else None
-        runtime = ControlledAgentRuntime(planner=planner)
+        runtime = ControlledAgentRuntime(planner=planner, tracer=AgentTracer(settings))
         try:
             result = runtime.invoke(question, str(run.id))
             answer = _answer(result)

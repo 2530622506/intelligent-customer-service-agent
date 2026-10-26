@@ -15,6 +15,10 @@ class Settings(BaseSettings):
     chat_base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
     chat_model: str = "qwen3.7-flash"
     chat_timeout_seconds: float = 30.0
+    langfuse_enabled: bool = True
+    langfuse_public_key: str = ""
+    langfuse_secret_key: str = ""
+    langfuse_base_url: str = "https://cloud.langfuse.com"
     readiness_strict: bool = False
     jwt_access_expires_seconds: int = 900
     jwt_refresh_expires_seconds: int = 604800

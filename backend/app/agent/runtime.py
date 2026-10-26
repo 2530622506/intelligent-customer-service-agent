@@ -15,6 +15,7 @@ from app.agent.registry import (
     default_agent_registry,
     default_tool_registry,
 )
+from app.observability.tracing import AgentTracer
 
 
 class AgentState(TypedDict, total=False):
@@ -55,11 +56,13 @@ class ControlledAgentRuntime:
         policy: RuntimePolicy | None = None,
         checkpointer: Any | None = None,
         planner: QwenSupervisorPlanner | None = None,
+        tracer: AgentTracer | None = None,
     ) -> None:
         self.registry = registry or default_agent_registry()
         self.tools = tools or default_tool_registry()
         self.policy = policy or RuntimePolicy()
         self.planner = planner
+        self.tracer = tracer
         self.graph = self._build_graph(checkpointer)
 
     def _build_graph(self, checkpointer: Any | None = None) -> Any:
@@ -83,6 +86,12 @@ class ControlledAgentRuntime:
         return builder.compile(checkpointer=checkpointer or InMemorySaver())
 
     def invoke(self, question: str, thread_id: str) -> dict[str, Any]:
+        if self.tracer:
+            with self.tracer.run(thread_id, question):
+                return self._invoke_graph(question, thread_id)
+        return self._invoke_graph(question, thread_id)
+
+    def _invoke_graph(self, question: str, thread_id: str) -> dict[str, Any]:
         return cast(dict[str, Any], self.graph.invoke(
             {"question": question, "user_id": "demo", "events": [], "results": []},
             {"configurable": {"thread_id": thread_id}},
