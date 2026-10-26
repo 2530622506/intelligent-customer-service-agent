@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 from collections.abc import AsyncIterator, Mapping
 from typing import Annotated
 from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
@@ -13,7 +14,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.agent.planner import QwenSupervisorPlanner
 from app.agent.runtime import ControlledAgentRuntime
 from app.auth.dependencies import get_principal, require_csrf
-from app.auth.types import AuthPrincipal
+from app.auth.policy import scope_for_roles
+from app.auth.types import AuthPrincipal, RoleCode
+from app.business.agents import OrderLogisticsAgent
+from app.business.mock_data import MockAfterSalesData
+from app.business.tools import MockLogisticsTool, MockOrderTool, ToolPolicyError
 from app.conversation.schemas import (
     ConversationView,
     CreateConversationRequest,
@@ -180,6 +185,9 @@ async def stream_run(
                 sequence.append(("retrieval", {"candidateCount": len(rag.citations)}))
                 sequence.extend(("citation", citation) for citation in rag.citations)
                 answer = rag.answer
+            if "order_logistics" in selected_agents:
+                answer, order_events = _order_result(question, principal.user_id)
+                sequence.extend(order_events)
             sequence.extend([
                 ("token", {"text": answer}),
                 ("done", {"status": "completed"}),
@@ -238,3 +246,27 @@ def _answer(result: dict[str, object]) -> str:
     if result.get("error_code"):
         return "当前问题无法在安全范围内完成，我可以为你转人工客服。"
     return f"已由 {result.get('intent', 'policy')} Agent 完成受控分析。"
+
+
+def _order_result(question: str, customer_id: UUID) -> tuple[str, list[tuple[str, dict[str, object]]]]:
+    order_match = re.search(r"CS\d{12}", question, flags=re.IGNORECASE)
+    if not order_match:
+        return "请提供订单号（例如 CS202610270001），我再帮你查询订单和物流。", []
+    order_no = order_match.group(0).upper()
+    data = MockAfterSalesData(customer_id)
+    scope = scope_for_roles(customer_id, frozenset({RoleCode.CUSTOMER}), ())
+    agent = OrderLogisticsAgent(MockOrderTool(data), MockLogisticsTool(data))
+    try:
+        order, logistics = agent.lookup(order_no, scope)
+    except ToolPolicyError:
+        return "当前账号无权查询该订单。", [("tool_result", {"tool": "order_lookup", "status": "forbidden"})]
+    if not order.found:
+        return "没有找到该订单，请确认订单号是否正确。", [("tool_result", {"tool": "order_lookup", "status": "not_found"})]
+    return (
+        f"订单 {order_no} 当前状态为：{order.status}。物流单号 {logistics.get('trackingNo')}，当前状态：{logistics.get('status')}。",
+        [
+            ("tool_call", {"tool": "order_lookup", "orderNo": order_no}),
+            ("tool_call", {"tool": "logistics_lookup", "orderNo": order_no}),
+            ("tool_result", {"tool": "order_logistics", "status": "ok", "orderNo": order_no}),
+        ],
+    )
