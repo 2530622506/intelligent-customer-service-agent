@@ -45,7 +45,7 @@ Embedding uses the DashScope native API with `text_type=document` for document v
 Before committing configuration changes:
 
 ```bash
-rg -n --hidden --glob '!.git/**' '(sk-lf-|pk-lf-|sk-[A-Za-z0-9]|AKIA[0-9A-Z]{16})' .
+rg -n --hidden --glob '!.git/**' 'LANGFUSE_(PUBLIC|SECRET)_KEY=.+|DASHSCOPE_API_KEY=.+|MINERU_API_KEY=.+' .
 docker compose -f infra/docker-compose.yml config
 ```
 

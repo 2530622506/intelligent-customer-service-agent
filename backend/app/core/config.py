@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     neo4j_uri: str = "bolt://localhost:7687"
     rustfs_endpoint: str = "http://localhost:9000"
 
-    cors_origins: str = "http://localhost:5173"
+    cors_origins: str = "http://localhost:5173,http://localhost:55173"
 
     model_config = SettingsConfigDict(
         env_file=".env",

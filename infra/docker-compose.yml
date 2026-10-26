@@ -6,7 +6,7 @@ services:
       POSTGRES_PASSWORD: app
       POSTGRES_DB: customer_service
     ports:
-      - "5432:5432"
+      - "15432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -18,7 +18,7 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      - "16379:6379"
     volumes:
       - redis-data:/data
     healthcheck:
@@ -30,8 +30,8 @@ services:
   rabbitmq:
     image: rabbitmq:3.13-management
     ports:
-      - "5672:5672"
-      - "15672:15672"
+      - "25672:5672"
+      - "25673:15672"
     environment:
       RABBITMQ_DEFAULT_USER: guest
       RABBITMQ_DEFAULT_PASS: guest
@@ -67,10 +67,12 @@ services:
       MINIO_ADDRESS: rustfs:9000
       MINIO_ACCESS_KEY: rustfsadmin
       MINIO_SECRET_KEY: rustfsadmin
+      MINIO_ACCESS_KEY_ID: rustfsadmin
+      MINIO_SECRET_ACCESS_KEY: rustfsadmin
       MINIO_USE_SSL: "false"
     ports:
       - "19530:19530"
-      - "9091:9091"
+      - "19091:9091"
     depends_on:
       milvus-etcd:
         condition: service_started
@@ -89,8 +91,8 @@ services:
     environment:
       NEO4J_AUTH: neo4j/change-me
     ports:
-      - "7474:7474"
-      - "7687:7687"
+      - "17474:7474"
+      - "17687:7687"
     volumes:
       - neo4j-data:/data
       - neo4j-logs:/logs
@@ -102,6 +104,7 @@ services:
 
   rustfs:
     image: rustfs/rustfs:latest
+    user: "0:0"
     environment:
       RUSTFS_VOLUMES: /data/rustfs0
       RUSTFS_ADDRESS: 0.0.0.0:9000
@@ -109,11 +112,15 @@ services:
       RUSTFS_CONSOLE_ENABLE: "true"
       RUSTFS_ACCESS_KEY: rustfsadmin
       RUSTFS_SECRET_KEY: rustfsadmin
+      RUSTFS_ACCESS_KEY_ID: rustfsadmin
+      RUSTFS_SECRET_ACCESS_KEY: rustfsadmin
+      RUSTFS_UNSAFE_BYPASS_DISK_CHECK: "true"
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "19000:9000"
+      - "19001:9001"
     volumes:
-      - rustfs-data:/data/rustfs0
+      - ./volumes/rustfs:/data/rustfs0
+      - ./volumes/rustfs-logs:/logs
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:9000/health || exit 1"]
       interval: 15s
@@ -158,7 +165,7 @@ services:
     build:
       context: ../frontend
     ports:
-      - "5173:80"
+      - "55173:80"
     depends_on:
       api:
         condition: service_healthy
@@ -171,4 +178,3 @@ volumes:
   milvus-data:
   neo4j-data:
   neo4j-logs:
-  rustfs-data:
