@@ -7,6 +7,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command, interrupt
 
 from app.agent.contracts import AgentPlan, ResumeDecision
+from app.agent.planner import QwenSupervisorPlanner
 from app.agent.registry import (
     AgentRegistry,
     RegistryError,
@@ -53,10 +54,12 @@ class ControlledAgentRuntime:
         tools: ToolRegistry | None = None,
         policy: RuntimePolicy | None = None,
         checkpointer: Any | None = None,
+        planner: QwenSupervisorPlanner | None = None,
     ) -> None:
         self.registry = registry or default_agent_registry()
         self.tools = tools or default_tool_registry()
         self.policy = policy or RuntimePolicy()
+        self.planner = planner
         self.graph = self._build_graph(checkpointer)
 
     def _build_graph(self, checkpointer: Any | None = None) -> Any:
@@ -101,34 +104,48 @@ class ControlledAgentRuntime:
         if state.get("plan"):
             return {"node_steps": state.get("node_steps", 0) + 1}
         question = state["question"]
-        # 首版使用确定性规划器；接入 Qwen 后只替换该节点，安全 Guard 不变。
+        plan = self._deterministic_plan(question)
+        if self.planner is not None:
+            try:
+                plan = self.planner.plan(question)
+            except Exception as error:  # noqa: BLE001  # 模型失败回退确定性规划。
+                return {
+                    **self._plan_result(plan),
+                    "events": [{"type": "planner_fallback", "reason": type(error).__name__}],
+                }
+        return self._plan_result(plan)
+
+    @staticmethod
+    def _plan_result(plan: AgentPlan) -> dict[str, Any]:
+        return {
+            "intent": plan.intent,
+            "plan": plan.model_dump(),
+            "node_steps": 2,
+            "events": [{"type": "agent_step", "node": "supervisor_plan", "intent": plan.intent}],
+        }
+
+    @staticmethod
+    def _deterministic_plan(question: str) -> AgentPlan:
         if any(keyword in question for keyword in ("订单", "物流", "快递")):
-            plan = AgentPlan(
+            return AgentPlan(
                 intent="order_logistics",
                 agents=["order_logistics"],
                 tools=["order_lookup", "logistics_lookup"],
                 reason="命中订单 / 物流关键词",
             )
         elif any(keyword in question for keyword in ("故障", "坏", "维修")):
-            plan = AgentPlan(
+            return AgentPlan(
                 intent="troubleshooting",
                 agents=["troubleshooting"],
                 tools=["knowledge_search", "ticket_draft"],
                 reason="命中产品排障关键词",
             )
-        else:
-            plan = AgentPlan(
-                intent="policy",
-                agents=["policy"],
-                tools=["knowledge_search", "graph_search"],
-                reason="默认进入政策知识 Agent",
-            )
-        return {
-            "intent": plan.intent,
-            "plan": plan.model_dump(),
-            "node_steps": state.get("node_steps", 0) + 1,
-            "events": [{"type": "agent_step", "node": "supervisor_plan", "intent": plan.intent}],
-        }
+        return AgentPlan(
+            intent="policy",
+            agents=["policy"],
+            tools=["knowledge_search", "graph_search"],
+            reason="默认进入政策知识 Agent",
+        )
 
     def _policy_guard(self, state: AgentState) -> dict[str, Any]:
         plan = AgentPlan.model_validate(state["plan"])

@@ -11,6 +11,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.agent.planner import QwenSupervisorPlanner
 from app.agent.runtime import ControlledAgentRuntime
 from app.auth.dependencies import get_principal, require_csrf
 from app.auth.types import AuthPrincipal
@@ -21,6 +22,7 @@ from app.conversation.schemas import (
     MessageView,
     RunView,
 )
+from app.core.config import Settings, get_settings
 from app.db.base import get_db, session_factory
 from app.models import AgentRun, Conversation, ConversationMessage
 
@@ -128,6 +130,7 @@ async def stream_run(
     request: Request,
     principal: Annotated[AuthPrincipal, Depends(get_principal)],
     session: Annotated[AsyncSession, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> StreamingResponse:
     run = await session.scalar(
         select(AgentRun)
@@ -159,7 +162,8 @@ async def stream_run(
     await session.commit()
 
     async def events() -> AsyncIterator[str]:
-        runtime = ControlledAgentRuntime()
+        planner = QwenSupervisorPlanner(settings) if settings.dashscope_api_key else None
+        runtime = ControlledAgentRuntime(planner=planner)
         try:
             result = runtime.invoke(question, str(run.id))
             answer = _answer(result)
