@@ -124,7 +124,7 @@ async def create_run(
     return RunView(id=str(run.id), turn_id=str(run.turn_id), status=run.status)
 
 
-@router.post("/{conversation_id}/runs/{run_id}/stream")
+@router.post("/{conversation_id}/runs/{run_id}/stream", dependencies=[Depends(require_csrf)])
 async def stream_run(
     conversation_id: UUID,
     run_id: UUID,
