@@ -21,7 +21,10 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     rabbitmq_url: str = "amqp://guest:guest@localhost:5672/"
     milvus_uri: str = "http://localhost:19530"
+    milvus_token: str = ""
     neo4j_uri: str = "bolt://localhost:7687"
+    neo4j_user: str = "neo4j"
+    neo4j_password: str = "change-me"
     rustfs_endpoint: str = "http://localhost:9000"
     rustfs_access_key: str = "rustfsadmin"
     rustfs_secret_key: str = "rustfsadmin"
@@ -34,6 +37,16 @@ class Settings(BaseSettings):
     mineru_enable_table: bool = True
     mineru_poll_interval_ms: int = 3000
     mineru_poll_timeout_ms: int = 600000
+    embedding_api_key: str = ""
+    embedding_base_url: str = "https://dashscope.aliyuncs.com/api/v1/services/embeddings/text-embedding/text-embedding"
+    embedding_model: str = "qwen3.7-text-embedding"
+    embedding_dimension: int = 1024
+    rerank_enabled: bool = True
+    rerank_api_key: str = ""
+    rerank_base_url: str = "https://dashscope.aliyuncs.com/api/v1/services/rerank/text-rerank/text-rerank"
+    rerank_model: str = "qwen3.7-text-rerank"
+    rerank_max_documents: int = 50
+    rerank_max_document_chars: int = 8000
 
     cors_origins: str = "http://localhost:5173,http://localhost:55173"
 
