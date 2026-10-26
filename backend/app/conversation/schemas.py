@@ -1,3 +1,5 @@
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 
@@ -30,3 +32,12 @@ class RunView(BaseModel):
     id: str
     turn_id: str
     status: str
+
+
+class SSEEvent(BaseModel):
+    eventId: int
+    conversationId: str
+    turnId: str
+    runId: str
+    type: str
+    data: dict[str, Any]

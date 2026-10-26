@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-import json
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Mapping
 from typing import Annotated
 from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
@@ -21,6 +20,7 @@ from app.conversation.schemas import (
     CreateRunRequest,
     MessageView,
     RunView,
+    SSEEvent,
 )
 from app.core.config import Settings, get_settings
 from app.db.base import get_db, session_factory
@@ -177,7 +177,7 @@ async def stream_run(
             for event_id, (event_type, data) in enumerate(sequence, 1):
                 if await request.is_disconnected():
                     return
-                yield f"id: {event_id}\nevent: {event_type}\ndata: {json.dumps({'type': event_type, 'data': data}, ensure_ascii=False)}\n\n"
+                yield _format_sse(event_id, event_type, conversation_id, run.turn_id, run.id, data)
                 await asyncio.sleep(0)
             async with session_factory() as write_session:
                 stored_run = await write_session.get(AgentRun, run_id, with_for_update=True)
@@ -192,16 +192,35 @@ async def stream_run(
                     stored_run.status = "failed"
                     stored_run.error_code = str(error)[:80]
                     await write_session.commit()
-            yield 'event: error\ndata: {"type":"error","data":{"code":"RUN_FAILED"}}\n\n'
+            yield _format_sse(1, "error", conversation_id, run.turn_id, run.id, {"code": "RUN_FAILED"})
 
     return StreamingResponse(events(), media_type="text/event-stream", headers={"Cache-Control": "no-cache"})
 
 
 async def _replay_completed(run: AgentRun, answer: str) -> AsyncIterator[str]:
     """断线重连只回放已持久化结果，不再次执行 Agent。"""
-    yield 'id: 1\nevent: run_started\ndata: {"type":"run_started","data":{"status":"replay"}}\n\n'
-    yield f'id: 2\nevent: token\ndata: {{"type":"token","data":{{"text":{json.dumps(answer, ensure_ascii=False)}}}}}\n\n'
-    yield 'id: 3\nevent: done\ndata: {"type":"done","data":{"status":"completed","replay":true}}\n\n'
+    yield _format_sse(1, "run_started", run.conversation_id, run.turn_id, run.id, {"status": "replay"})
+    yield _format_sse(2, "token", run.conversation_id, run.turn_id, run.id, {"text": answer})
+    yield _format_sse(3, "done", run.conversation_id, run.turn_id, run.id, {"status": "completed", "replay": True})
+
+
+def _format_sse(
+    event_id: int,
+    event_type: str,
+    conversation_id: UUID,
+    turn_id: UUID,
+    run_id: UUID,
+    data: Mapping[str, object],
+) -> str:
+    event = SSEEvent(
+        eventId=event_id,
+        conversationId=str(conversation_id),
+        turnId=str(turn_id),
+        runId=str(run_id),
+        type=event_type,
+        data=dict(data),
+    )
+    return f"id: {event_id}\nevent: {event_type}\ndata: {event.model_dump_json()}\n\n"
 
 
 def _answer(result: dict[str, object]) -> str:
