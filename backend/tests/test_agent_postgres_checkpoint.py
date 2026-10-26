@@ -1,3 +1,5 @@
+from uuid import uuid4
+
 import pytest
 from langgraph.types import Command
 
@@ -9,7 +11,7 @@ async def test_postgres_checkpointer_resumes_interrupt() -> None:
     async with postgres_runtime(
         "postgresql+asyncpg://app:app@127.0.0.1:15432/customer_service"
     ) as runtime:
-        config = {"configurable": {"thread_id": "postgres-interrupt-test"}}
+        config = {"configurable": {"thread_id": f"postgres-interrupt-{uuid4()}"}}
         initial = await runtime.graph.ainvoke(
             {
                 "question": "申请退款",
