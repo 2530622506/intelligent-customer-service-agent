@@ -4,9 +4,9 @@ import asyncio
 import json
 from collections.abc import AsyncIterator
 from typing import Annotated
-from uuid import UUID, uuid4
+from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -95,13 +95,24 @@ async def create_run(
     payload: CreateRunRequest,
     principal: Annotated[AuthPrincipal, Depends(get_principal)],
     session: Annotated[AsyncSession, Depends(get_db)],
+    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
 ) -> RunView:
     conversation = await session.scalar(
         select(Conversation).where(Conversation.id == conversation_id, Conversation.owner_user_id == principal.user_id)
     )
     if not conversation:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="会话不存在")
-    turn_id = UUID(payload.turn_id) if payload.turn_id else uuid4()
+    if payload.turn_id:
+        turn_id = UUID(payload.turn_id)
+    elif idempotency_key:
+        turn_id = uuid5(NAMESPACE_URL, f"customer-service-run:{principal.user_id}:{idempotency_key}")
+    else:
+        turn_id = uuid4()
+    existing = await session.scalar(select(AgentRun).where(AgentRun.turn_id == turn_id))
+    if existing:
+        if existing.conversation_id != conversation_id:
+            raise HTTPException(status_code=409, detail="幂等键已用于其他会话")
+        return RunView(id=str(existing.id), turn_id=str(existing.turn_id), status=existing.status)
     run = AgentRun(conversation_id=conversation_id, turn_id=turn_id, status="queued")
     session.add(run)
     session.add(ConversationMessage(conversation_id=conversation_id, turn_id=turn_id, author_type="customer", actor_id=principal.user_id, content=payload.message, status="completed"))
@@ -130,6 +141,20 @@ async def stream_run(
     )
     if not question:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="运行缺少用户问题")
+    if run.status == "completed":
+        answer = await session.scalar(
+            select(ConversationMessage.content).where(
+                ConversationMessage.conversation_id == conversation_id,
+                ConversationMessage.turn_id == run.turn_id,
+                ConversationMessage.author_type == "agent",
+            )
+        )
+        return StreamingResponse(
+            _replay_completed(run, answer or ""),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache"},
+        )
+
     run.status = "running"
     await session.commit()
 
@@ -165,6 +190,13 @@ async def stream_run(
             yield 'event: error\ndata: {"type":"error","data":{"code":"RUN_FAILED"}}\n\n'
 
     return StreamingResponse(events(), media_type="text/event-stream", headers={"Cache-Control": "no-cache"})
+
+
+async def _replay_completed(run: AgentRun, answer: str) -> AsyncIterator[str]:
+    """断线重连只回放已持久化结果，不再次执行 Agent。"""
+    yield 'id: 1\nevent: run_started\ndata: {"type":"run_started","data":{"status":"replay"}}\n\n'
+    yield f'id: 2\nevent: token\ndata: {{"type":"token","data":{{"text":{json.dumps(answer, ensure_ascii=False)}}}}}\n\n'
+    yield 'id: 3\nevent: done\ndata: {"type":"done","data":{"status":"completed","replay":true}}\n\n'
 
 
 def _answer(result: dict[str, object]) -> str:
