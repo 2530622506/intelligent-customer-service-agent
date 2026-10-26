@@ -374,3 +374,53 @@ class AuditLog(UUIDPrimaryKeyMixin, Base):
     trace_id: Mapped[str | None] = mapped_column(String(128))
     payload: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class EvalDataset(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "eval_dataset"
+
+    name: Mapped[str] = mapped_column(String(160), unique=True, nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(32), default="draft", nullable=False)
+
+
+class EvalCase(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "eval_case"
+
+    dataset_id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True), ForeignKey("eval_dataset.id", ondelete="CASCADE"), nullable=False
+    )
+    case_key: Mapped[str] = mapped_column(String(120), nullable=False)
+    question: Mapped[str] = mapped_column(Text, nullable=False)
+    expected_output: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+    __table_args__ = (UniqueConstraint("dataset_id", "case_key", name="uq_eval_case_key"),)
+
+
+class EvalRun(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "eval_run"
+
+    dataset_id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True), ForeignKey("eval_dataset.id", ondelete="CASCADE"), nullable=False
+    )
+    model_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), default="queued", nullable=False)
+    filter_value: Mapped[str | None] = mapped_column(String(160))
+    summary: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
+
+
+class EvalScore(UUIDPrimaryKeyMixin, Base):
+    __tablename__ = "eval_score"
+
+    run_id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True), ForeignKey("eval_run.id", ondelete="CASCADE"), nullable=False
+    )
+    case_id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True), ForeignKey("eval_case.id", ondelete="CASCADE"), nullable=False
+    )
+    metric: Mapped[str] = mapped_column(String(120), nullable=False)
+    value: Mapped[float] = mapped_column(nullable=False)
+    comment: Mapped[str | None] = mapped_column(Text)
+
+    __table_args__ = (UniqueConstraint("run_id", "case_id", "metric", name="uq_eval_score_metric"),)
