@@ -84,6 +84,37 @@ export async function resolveHandoff(taskId: string) {
   })
 }
 
+export interface MessageView {
+  id: string
+  turn_id: string
+  author_type: string
+  content: string
+  status: string
+}
+
+export async function listConversationMessages(conversationId: string) {
+  return apiRequest<MessageView[]>(`/conversations/${conversationId}/messages`)
+}
+
+export async function sendStaffMessage(taskId: string, content: string, internal: boolean) {
+  return apiRequest<{ messageId: string; authorType: string; status: string }>(`/workflow/handoff/${taskId}/message`, {
+    method: 'POST',
+    headers: { 'X-CSRF-Token': readCsrfToken() ?? '' },
+    body: JSON.stringify({ content, internal }),
+  })
+}
+
+export async function uploadKnowledgeDocument(file: File) {
+  const form = new FormData()
+  form.append('upload', file)
+  const response = await fetch('/api/v1/knowledge/documents/upload', {
+    method: 'POST', credentials: 'include', body: form,
+    headers: { 'X-CSRF-Token': readCsrfToken() ?? '' },
+  })
+  if (!response.ok) throw new Error(`文档上传失败：${response.status}`)
+  return response.json() as Promise<{ taskId: string; documentId: string; status: string }>
+}
+
 export interface KnowledgeEntityView {
   id: string
   name: string
