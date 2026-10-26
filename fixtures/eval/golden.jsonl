@@ -1,0 +1,10 @@
+{"caseKey":"policy-return","question":"签收后几天内可以退货？","expectedOutput":{"intent":"policy"}}
+{"caseKey":"policy-warranty","question":"产品保修政策是什么？","expectedOutput":{"intent":"policy"}}
+{"caseKey":"order-status","question":"我的订单现在到哪里了？","expectedOutput":{"intent":"order_logistics"}}
+{"caseKey":"logistics-status","question":"快递什么时候送到？","expectedOutput":{"intent":"order_logistics"}}
+{"caseKey":"troubleshooting-power","question":"设备坏了无法开机怎么办？","expectedOutput":{"intent":"troubleshooting"}}
+{"caseKey":"troubleshooting-repair","question":"产品需要维修，应该怎么处理？","expectedOutput":{"intent":"troubleshooting"}}
+{"caseKey":"policy-no-evidence","question":"公司年会抽奖规则是什么？","expectedOutput":{"intent":"policy"}}
+{"caseKey":"order-followup","question":"订单物流异常怎么处理？","expectedOutput":{"intent":"order_logistics"}}
+{"caseKey":"repair-followup","question":"设备故障需要售后维修","expectedOutput":{"intent":"troubleshooting"}}
+{"caseKey":"policy-unknown","question":"退货政策里没有规定的内容怎么办？","expectedOutput":{"intent":"policy"}}
