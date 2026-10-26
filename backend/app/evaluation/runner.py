@@ -15,13 +15,18 @@ class OfflineEvaluationRunner:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
-    async def run(self, dataset_id: UUID, model_name: str = "qwen3.7-flash") -> EvalRun:
+    async def run(
+        self, dataset_id: UUID, model_name: str = "qwen3.7-flash", existing_run: EvalRun | None = None
+    ) -> EvalRun:
         dataset = await self.session.get(EvalDataset, dataset_id)
         if not dataset:
             raise ValueError("评测数据集不存在")
-        run = EvalRun(dataset_id=dataset_id, model_name=model_name, status="running", summary={})
-        self.session.add(run)
-        await self.session.flush()
+        run = existing_run or EvalRun(dataset_id=dataset_id, model_name=model_name, status="running", summary={})
+        if existing_run is None:
+            self.session.add(run)
+            await self.session.flush()
+        else:
+            run.status = "running"
         cases = await self.session.scalars(
             select(EvalCase).where(EvalCase.dataset_id == dataset_id, EvalCase.enabled.is_(True))
         )

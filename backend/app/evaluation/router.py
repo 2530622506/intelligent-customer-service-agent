@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth.dependencies import get_principal, require_csrf
 from app.auth.types import AuthPrincipal
 from app.db.base import get_db
+from app.evaluation.runner import OfflineEvaluationRunner
 from app.models import EvalCase, EvalDataset, EvalRun, EvalScore
 
 router = APIRouter(prefix="/evaluations", tags=["evaluations"])
@@ -92,3 +93,20 @@ async def list_scores(
 ) -> list[dict[str, object]]:
     rows = await session.scalars(select(EvalScore).where(EvalScore.run_id == run_id))
     return [{"metric": row.metric, "value": row.value, "comment": row.comment} for row in rows]
+
+
+@router.post("/runs/{run_id}/execute", dependencies=[Depends(require_csrf)])
+async def execute_run(
+    run_id: UUID,
+    principal: Annotated[AuthPrincipal, Depends(get_principal)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, object]:
+    if not principal.can("evaluation:run"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="没有评测权限")
+    run = await session.get(EvalRun, run_id)
+    if not run:
+        raise HTTPException(status_code=404, detail="评测运行不存在")
+    if run.status == "completed":
+        return {"id": str(run.id), "status": run.status, "summary": run.summary}
+    completed = await OfflineEvaluationRunner(session).run(run.dataset_id, run.model_name, existing_run=run)
+    return {"id": str(completed.id), "status": completed.status, "summary": completed.summary}

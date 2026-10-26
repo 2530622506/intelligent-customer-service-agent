@@ -129,3 +129,31 @@ export async function createEvaluationDataset(name: string) {
     body: JSON.stringify({ name }),
   })
 }
+
+export interface KnowledgeRelationView {
+  id: string
+  source_entity_id: string
+  target_entity_id: string
+  relation_type: string
+  status: string
+}
+
+export async function listKnowledgeRelations() {
+  return apiRequest<KnowledgeRelationView[]>('/knowledge/relations')
+}
+
+export async function createEvaluationRun(datasetId: string) {
+  return apiRequest<{ id: string; status: string; model: string }>(`/evaluations/datasets/${datasetId}/runs`, {
+    method: 'POST', headers: { 'X-CSRF-Token': readCsrfToken() ?? '' },
+  })
+}
+
+export async function executeEvaluationRun(runId: string) {
+  return apiRequest<{ id: string; status: string; summary: Record<string, unknown> }>(`/evaluations/runs/${runId}/execute`, {
+    method: 'POST', headers: { 'X-CSRF-Token': readCsrfToken() ?? '' },
+  })
+}
+
+export async function listEvaluationScores(runId: string) {
+  return apiRequest<Array<{ metric: string; value: number; comment: string | null }>>(`/evaluations/runs/${runId}/scores`)
+}
