@@ -56,3 +56,30 @@ export async function createRun(conversationId: string, message: string) {
     body: JSON.stringify({ message }),
   })
 }
+
+export interface HandoffTaskView {
+  id: string
+  conversationId: string
+  status: string
+  reason: string
+  riskLevel: string
+  assignedUserId: string | null
+}
+
+export async function handoffQueue() {
+  return apiRequest<HandoffTaskView[]>('/workflow/handoff/queue')
+}
+
+export async function claimHandoff(taskId: string) {
+  return apiRequest<HandoffTaskView>(`/workflow/handoff/${taskId}/claim`, {
+    method: 'POST',
+    headers: { 'X-CSRF-Token': readCsrfToken() ?? '' },
+  })
+}
+
+export async function resolveHandoff(taskId: string) {
+  return apiRequest<HandoffTaskView>(`/workflow/handoff/${taskId}/resolve`, {
+    method: 'POST',
+    headers: { 'X-CSRF-Token': readCsrfToken() ?? '' },
+  })
+}
