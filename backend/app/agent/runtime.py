@@ -142,7 +142,7 @@ class ControlledAgentRuntime:
                 tools=["order_lookup", "logistics_lookup"],
                 reason="命中订单 / 物流关键词",
             )
-        elif any(keyword in question for keyword in ("故障", "坏", "维修")):
+        elif any(keyword in question for keyword in ("故障", "坏", "维修", "无法开机", "开不了机", "不通电", "不能开机")):
             return AgentPlan(
                 intent="troubleshooting",
                 agents=["troubleshooting"],

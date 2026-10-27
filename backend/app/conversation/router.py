@@ -172,13 +172,17 @@ async def stream_run(
     async def events() -> AsyncIterator[str]:
         planner = QwenSupervisorPlanner(settings) if settings.dashscope_api_key else None
         runtime = ControlledAgentRuntime(planner=planner, tracer=AgentTracer(settings))
+        event_id = 1
         try:
-            result = runtime.invoke(question, str(run.id))
+            # 先把连接状态发给客户端，再把同步的 LangGraph 调用移到线程，避免事件循环被模型调用阻塞。
+            yield _format_sse(event_id, "run_started", conversation_id, run.turn_id, run.id, {"status": "running"})
+            event_id += 1
+            yield _format_sse(event_id, "agent_step", conversation_id, run.turn_id, run.id, {"node": "supervisor_plan", "status": "running"})
+            event_id += 1
+            await asyncio.sleep(0)
+            result = await asyncio.to_thread(runtime.invoke, question, str(run.id))
             answer = _answer(result)
-            sequence: list[tuple[str, Mapping[str, object]]] = [
-                ("run_started", {"status": "running"}),
-                ("agent_step", {"node": "supervisor_plan", "status": "completed"}),
-            ]
+            sequence: list[tuple[str, Mapping[str, object]]] = [("agent_step", {"node": "supervisor_plan", "status": "completed"})]
             plan = result.get("plan")
             selected_agents = plan.get("agents", []) if isinstance(plan, dict) else []
             rag = await PolicyRAGService(settings).answer(question) if "policy" in selected_agents else None
@@ -192,15 +196,15 @@ async def stream_run(
             if "troubleshooting" in selected_agents:
                 answer, troubleshooting_events = _troubleshooting_result(question)
                 sequence.extend(troubleshooting_events)
-            sequence.extend([
-                ("token", {"text": answer}),
-                ("done", {"status": "completed"}),
-            ])
-            for event_id, (event_type, data) in enumerate(sequence, 1):
+            sequence.extend(("token", {"text": chunk}) for chunk in _answer_chunks(answer))
+            sequence.append(("done", {"status": "completed"}))
+            for event_type, data in sequence:
                 if await request.is_disconnected():
                     break
                 yield _format_sse(event_id, event_type, conversation_id, run.turn_id, run.id, data)
-                await asyncio.sleep(0)
+                event_id += 1
+                # 给 ASGI / Nginx 一个调度点，确保浏览器可以逐段消费，而不是等完整答案生成后一次性收到。
+                await asyncio.sleep(0.015 if event_type == "token" else 0)
             # 客户端断开只停止网络输出，不丢弃已经完成的 Agent 结果。
             async with session_factory() as write_session:
                 stored_run = await write_session.get(AgentRun, run_id, with_for_update=True)
@@ -215,7 +219,7 @@ async def stream_run(
                     stored_run.status = "failed"
                     stored_run.error_code = str(error)[:80]
                     await write_session.commit()
-            yield _format_sse(1, "error", conversation_id, run.turn_id, run.id, {"code": "RUN_FAILED"})
+            yield _format_sse(event_id, "error", conversation_id, run.turn_id, run.id, {"code": "RUN_FAILED"})
 
     return StreamingResponse(events(), media_type="text/event-stream", headers={"Cache-Control": "no-cache"})
 
@@ -223,8 +227,19 @@ async def stream_run(
 async def _replay_completed(run: AgentRun, answer: str) -> AsyncIterator[str]:
     """断线重连只回放已持久化结果，不再次执行 Agent。"""
     yield _format_sse(1, "run_started", run.conversation_id, run.turn_id, run.id, {"status": "replay"})
-    yield _format_sse(2, "token", run.conversation_id, run.turn_id, run.id, {"text": answer})
-    yield _format_sse(3, "done", run.conversation_id, run.turn_id, run.id, {"status": "completed", "replay": True})
+    event_id = 2
+    for chunk in _answer_chunks(answer):
+        yield _format_sse(event_id, "token", run.conversation_id, run.turn_id, run.id, {"text": chunk})
+        event_id += 1
+        await asyncio.sleep(0.015)
+    yield _format_sse(event_id, "done", run.conversation_id, run.turn_id, run.id, {"status": "completed", "replay": True})
+
+
+def _answer_chunks(answer: str, chunk_size: int = 12) -> list[str]:
+    """把已生成的答案切成短片段，保持 SSE 的增量消费体验。"""
+    if not answer:
+        return []
+    return [answer[index:index + chunk_size] for index in range(0, len(answer), chunk_size)]
 
 
 def _format_sse(
@@ -249,7 +264,14 @@ def _format_sse(
 def _answer(result: dict[str, object]) -> str:
     if result.get("error_code"):
         return "当前问题无法在安全范围内完成，我可以为你转人工客服。"
-    return f"已由 {result.get('intent', 'policy')} Agent 完成受控分析。"
+    fallback_answers = {
+        "policy": "我已识别这是售后政策问题，但当前知识库暂时不可用。请稍后重试，或转人工客服继续处理。",
+        "troubleshooting": "我已识别这是产品故障排查问题，请补充产品型号和具体故障现象。",
+        "order_logistics": "我已识别这是订单 / 物流问题，请提供订单号，我再帮你查询。",
+        "analytics": "我已识别这是售后数据分析问题，但当前分析服务暂时不可用。",
+        "ticket": "我已识别这是工单处理问题，请补充需要处理的售后事项。",
+    }
+    return fallback_answers.get(str(result.get("intent", "policy")), "当前服务暂时不可用，请稍后重试或转人工客服。")
 
 
 def _order_result(question: str, customer_id: UUID) -> tuple[str, list[tuple[str, dict[str, object]]]]:

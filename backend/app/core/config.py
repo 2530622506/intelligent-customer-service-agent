@@ -1,6 +1,7 @@
 from functools import lru_cache
 from typing import Literal
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -11,6 +12,9 @@ class Settings(BaseSettings):
     app_port: int = 8000
     # 开发默认值仅用于本地占位；部署前必须通过 APP_SECRET_KEY 注入随机长密钥。
     app_secret_key: str = "change-me-in-local-env-with-at-least-32-bytes"
+    # 兼容 OpenAI-compatible 服务（例如 DashScope compatible-mode）。
+    openai_api_key: str = ""
+    openai_base_url: str = ""
     dashscope_api_key: str = ""
     chat_base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
     chat_model: str = "qwen3.7-flash"
@@ -65,6 +69,19 @@ class Settings(BaseSettings):
         extra="ignore",
         case_sensitive=False,
     )
+
+    @model_validator(mode="after")
+    def apply_openai_compatible_defaults(self) -> "Settings":
+        """把 OpenAI-compatible 环境变量映射到现有模型供应商配置。"""
+        if not self.dashscope_api_key:
+            self.dashscope_api_key = self.openai_api_key
+        if not self.embedding_api_key and "embedding_api_key" not in self.model_fields_set:
+            self.embedding_api_key = self.dashscope_api_key
+        if not self.rerank_api_key and "rerank_api_key" not in self.model_fields_set:
+            self.rerank_api_key = self.dashscope_api_key
+        if self.openai_base_url and self.chat_base_url == "https://dashscope.aliyuncs.com/compatible-mode/v1":
+            self.chat_base_url = self.openai_base_url
+        return self
 
     @property
     def cors_origin_list(self) -> list[str]:

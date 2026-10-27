@@ -131,9 +131,29 @@ services:
   api:
     build:
       context: ../backend
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       APP_ENV: development
       READINESS_STRICT: "true"
+      # DashScope / MinerU 等外部服务通过宿主机代理访问，内部容器域名不走代理。
+      HTTP_PROXY: http://host.docker.internal:7897
+      HTTPS_PROXY: http://host.docker.internal:7897
+      NO_PROXY: localhost,127.0.0.1,postgres,redis,rabbitmq,milvus,milvus-etcd,neo4j,rustfs,api,host.docker.internal
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
+      DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:-}
+      CHAT_BASE_URL: ${CHAT_BASE_URL:-https://dashscope.aliyuncs.com/compatible-mode/v1}
+      CHAT_MODEL: ${CHAT_MODEL:-qwen3.7-flash}
+      EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-qwen3.7-text-embedding}
+      RERANK_API_KEY: ${RERANK_API_KEY:-}
+      RERANK_MODEL: ${RERANK_MODEL:-qwen3.7-text-rerank}
+      MINERU_API_KEY: ${MINERU_API_KEY:-}
+      LANGFUSE_ENABLED: ${LANGFUSE_ENABLED:-true}
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+      LANGFUSE_BASE_URL: ${LANGFUSE_BASE_URL:-https://cloud.langfuse.com}
       DATABASE_URL: postgresql+asyncpg://app:app@postgres:5432/customer_service
       REDIS_URL: redis://redis:6379/0
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
@@ -165,8 +185,13 @@ services:
     build:
       context: ../backend
     command: ["python", "scripts/run_worker.py"]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       APP_ENV: development
+      HTTP_PROXY: http://host.docker.internal:7897
+      HTTPS_PROXY: http://host.docker.internal:7897
+      NO_PROXY: localhost,127.0.0.1,postgres,redis,rabbitmq,milvus,milvus-etcd,neo4j,rustfs,api,host.docker.internal
       DATABASE_URL: postgresql+asyncpg://app:app@postgres:5432/customer_service
       REDIS_URL: redis://redis:6379/0
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/

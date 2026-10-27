@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 
+import httpx
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 from pydantic import SecretStr
@@ -14,6 +16,8 @@ from app.retrieval.providers import (
     ProviderError,
 )
 from app.retrieval.types import SearchHit
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -45,7 +49,11 @@ class PolicyRAGService:
             selected = ordered[:5]
             answer = await self._generate(question, selected)
             return RAGAnswer(answer, [self._citation(hit) for hit in selected], True)
-        except (ProviderError, OSError, TimeoutError):
+        except (ProviderError, httpx.HTTPError, OSError, TimeoutError) as error:
+            logger.warning("RAG provider unavailable, falling back to agent response: %s", type(error).__name__)
+            return None
+        except Exception as error:  # noqa: BLE001  # Milvus SDK 的异常类型跨版本不稳定，必须显式降级。
+            logger.warning("RAG service unavailable, falling back to agent response: %s", type(error).__name__)
             return None
 
     async def _generate(self, question: str, hits: list[SearchHit]) -> str:

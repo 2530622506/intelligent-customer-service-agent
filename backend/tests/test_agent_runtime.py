@@ -11,6 +11,14 @@ def test_runtime_routes_policy_and_enforces_registered_tools() -> None:
     assert result["results"][0]["agent"] == "policy"
 
 
+def test_runtime_routes_power_failure_to_troubleshooting() -> None:
+    runtime = ControlledAgentRuntime()
+    result = runtime.invoke("产品无法开机怎么排查？", "troubleshooting-route-test")
+
+    assert result["intent"] == "troubleshooting"
+    assert result["results"][0]["agent"] == "troubleshooting"
+
+
 def test_runtime_rejects_budget_overflow() -> None:
     runtime = ControlledAgentRuntime(policy=RuntimePolicy(max_tool_calls=1))
     result = runtime.invoke("我的订单物流到哪里了？", "budget-test")
