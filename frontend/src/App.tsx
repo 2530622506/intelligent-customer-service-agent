@@ -4,6 +4,7 @@ import { claimHandoff, createConversation, createRun, handoffQueue, login, resol
 import { useAgentStream } from './hooks/use-agent-stream'
 import OperationsPanel from './components/OperationsPanel'
 import StaffConversationPanel from './components/StaffConversationPanel'
+import AdminPanel from './components/AdminPanel'
 
 function App() {
   const [username, setUsername] = useState('demo-customer')
@@ -92,6 +93,7 @@ function App() {
       </header>
       <section className="mx-auto flex min-h-[calc(100vh-81px)] max-w-6xl flex-col px-6 py-8">
         {operations ? <div className="mb-5"><OperationsPanel /></div> : null}
+        {roles.includes('admin') ? <div className="mb-5"><AdminPanel /></div> : null}
         {staffMode ? <section className="mb-5 rounded-2xl border border-slate-800 bg-slate-900/60 p-5"><div className="flex items-center justify-between"><div><h2 className="font-semibold">人工队列</h2><p className="mt-1 text-sm text-slate-400">服务端按角色和 DataScope 返回可处理任务。</p></div><button className="rounded-lg border border-slate-700 px-3 py-2 text-sm hover:border-cyan-400" onClick={() => void refreshQueue()}>刷新队列</button></div><div className="mt-4 space-y-3">{queue.length === 0 ? <p className="text-sm text-slate-500">暂无待处理会话，点击刷新查看最新状态。</p> : queue.map((task) => <div className={`flex cursor-pointer items-center justify-between rounded-xl border p-4 ${selectedTask?.id === task.id ? 'border-cyan-400/60' : 'border-slate-800'} bg-slate-950/60`} key={task.id} onClick={() => setSelectedTask(task)}><div><p className="text-sm font-medium">{task.reason}</p><p className="mt-1 text-xs text-slate-500">{task.status} · 风险 {task.riskLevel}</p></div><div className="flex gap-2">{task.status === 'queued' ? <button className="rounded-lg bg-cyan-400 px-3 py-2 text-sm font-medium text-slate-950" onClick={(event) => { event.stopPropagation(); void handleClaim(task.id) }}>接管</button> : null}{task.status === 'human_active' ? <button className="rounded-lg border border-emerald-400/40 px-3 py-2 text-sm text-emerald-300" onClick={(event) => { event.stopPropagation(); void handleResolve(task.id) }}>解决</button> : null}</div></div>)}</div><div className="mt-4"><StaffConversationPanel task={selectedTask} /></div></section> : null}
         <div className="flex-1 rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
           <div className="flex items-center justify-between border-b border-slate-800 pb-4"><div><h2 className="font-semibold">今天需要什么帮助？</h2><p className="mt-1 text-sm text-slate-400">答案会展示 Agent 处理状态和可追溯依据。</p></div><span className="text-xs text-slate-500">{state.status}</span></div>

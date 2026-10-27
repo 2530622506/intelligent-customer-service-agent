@@ -185,6 +185,40 @@ export async function executeEvaluationRun(runId: string) {
   })
 }
 
+export interface AdminUserView {
+  id: string
+  username: string
+  displayName: string
+  status: string
+}
+
+export interface AdminRoleView {
+  id: string
+  code: string
+  name: string
+  description: string | null
+}
+
+export async function listAdminUsers() {
+  return apiRequest<AdminUserView[]>('/admin/users')
+}
+
+export async function listAdminRoles() {
+  return apiRequest<AdminRoleView[]>('/admin/roles')
+}
+
+export async function listAdminPermissions() {
+  return apiRequest<Array<{ id: string; code: string; description: string | null }>>('/admin/permissions')
+}
+
+export async function assignUserRoles(userId: string, roleCodes: string[]) {
+  return apiRequest<{ userId: string; roleCodes: string[] }>(`/admin/users/${userId}/roles`, {
+    method: 'PUT',
+    headers: { 'X-CSRF-Token': readCsrfToken() ?? '' },
+    body: JSON.stringify({ role_codes: roleCodes }),
+  })
+}
+
 export async function listEvaluationScores(runId: string) {
   return apiRequest<Array<{ metric: string; value: number; comment: string | null }>>(`/evaluations/runs/${runId}/scores`)
 }
