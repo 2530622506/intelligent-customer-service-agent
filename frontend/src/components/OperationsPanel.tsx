@@ -1,23 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Database, FileUp, FileText, GitBranch, Play, Plus, RefreshCw } from 'lucide-react'
-import {
-  createEvaluationDataset,
-  createEvaluationRun,
-  createKnowledgeEntity,
-  executeEvaluationRun,
-  listEvaluationDatasets,
-  listEvaluationScores,
-  listKnowledgeDocuments,
-  listKnowledgeEntities,
-  listKnowledgeRelations,
-  publishKnowledgeDocument,
-  publishKnowledgeEntity,
-  uploadKnowledgeDocument,
-  type EvaluationDatasetView,
-  type KnowledgeDocumentView,
-  type KnowledgeEntityView,
-  type KnowledgeRelationView,
-} from '../lib/api'
+import { Check, Database, FileArchive, FileUp, GitBranch, Play, Plus, RefreshCw, Sparkles } from 'lucide-react'
+import { createEvaluationDataset, createEvaluationRun, createKnowledgeEntity, executeEvaluationRun, listEvaluationDatasets, listEvaluationScores, listKnowledgeDocuments, listKnowledgeEntities, listKnowledgeRelations, publishKnowledgeDocument, publishKnowledgeEntity, uploadKnowledgeDocument, type EvaluationDatasetView, type KnowledgeDocumentView, type KnowledgeEntityView, type KnowledgeRelationView } from '../lib/api'
+import { Button, EmptyState, ErrorState, LoadingState, MetricTile, Panel, PanelHeader, StatusPill, cn } from './ui'
 
 export default function OperationsPanel() {
   const [entities, setEntities] = useState<KnowledgeEntityView[]>([])
@@ -27,48 +11,26 @@ export default function OperationsPanel() {
   const [scores, setScores] = useState<Array<{ metric: string; value: number; comment: string | null }>>([])
   const [error, setError] = useState<string | null>(null)
   const [uploadStatus, setUploadStatus] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [runningDataset, setRunningDataset] = useState<string | null>(null)
 
   async function refresh() {
+    setLoading(true)
     try {
       const [nextDocuments, nextEntities, nextDatasets, nextRelations] = await Promise.all([listKnowledgeDocuments(), listKnowledgeEntities(), listEvaluationDatasets(), listKnowledgeRelations()])
-      setDocuments(nextDocuments)
-      setEntities(nextEntities)
-      setDatasets(nextDatasets)
-      setRelations(nextRelations)
-      setError(null)
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : '运营数据加载失败')
-    }
+      setDocuments(nextDocuments); setEntities(nextEntities); setDatasets(nextDatasets); setRelations(nextRelations); setError(null)
+    } catch (reason) { setError(reason instanceof Error ? reason.message : '运营数据加载失败') } finally { setLoading(false) }
   }
-
   useEffect(() => { void refresh() }, [])
 
-  async function runDataset(datasetId: string) {
-    const run = await createEvaluationRun(datasetId)
-    const completed = await executeEvaluationRun(run.id)
-    setScores(await listEvaluationScores(completed.id))
-  }
-
   async function uploadDocument(file: File) {
-    try {
-      const result = await uploadKnowledgeDocument(file)
-      setUploadStatus(`任务 ${result.taskId.slice(0, 8)} 已提交：${result.status}`)
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : '文档上传失败')
-    }
+    try { const result = await uploadKnowledgeDocument(file); setUploadStatus(`解析任务 ${result.taskId.slice(0, 8)} 已提交`); await refresh() } catch (reason) { setError(reason instanceof Error ? reason.message : '文档上传失败') }
   }
+  async function publishDocument(id: string) { try { await publishKnowledgeDocument(id); await refresh() } catch (reason) { setError(reason instanceof Error ? reason.message : '文档发布失败') } }
+  async function publishEntity(id: string) { try { await publishKnowledgeEntity(id); await refresh() } catch (reason) { setError(reason instanceof Error ? reason.message : '实体发布失败') } }
+  async function runDataset(id: string) { setRunningDataset(id); try { const run = await createEvaluationRun(id); const completed = await executeEvaluationRun(run.id); setScores(await listEvaluationScores(completed.id)) } catch (reason) { setError(reason instanceof Error ? reason.message : '评测运行失败') } finally { setRunningDataset(null) } }
 
-  return (
-    <section className="grid gap-5 lg:grid-cols-2">
-      <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5 lg:col-span-2"><div className="flex items-center gap-3"><FileUp size={18} className="text-cyan-300" /><div><h2 className="font-semibold">知识文档</h2><p className="mt-1 text-sm text-slate-400">原始文件进入 RustFS，解析任务由 MinerU Cloud Worker 处理。</p></div></div><label className="mt-4 flex cursor-pointer items-center justify-center rounded-xl border border-dashed border-slate-700 px-4 py-6 text-sm text-slate-400 hover:border-cyan-400"><input className="sr-only" type="file" accept=".md,.txt,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.html" onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadDocument(file) }} />选择文档上传</label>{uploadStatus ? <p className="mt-3 text-xs text-emerald-300">{uploadStatus}</p> : null}<div className="mt-4 space-y-2">{documents.map((document) => <div className="flex items-center justify-between rounded-lg border border-slate-800 p-3" key={document.id}><div className="flex items-center gap-3"><FileText size={16} className="text-cyan-300" /><div><p className="text-sm">{document.title}</p><p className="text-xs text-slate-500">{document.status} · {document.versions.length} 个版本</p></div></div>{document.status === 'published' ? <span className="text-xs text-emerald-300">已发布</span> : <button className="text-xs text-cyan-300" onClick={() => void publishKnowledgeDocument(document.id).then(refresh)}>审核并发布</button>}</div>)}</div></div>
-      <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
-        <div className="flex items-center justify-between"><div><h2 className="font-semibold">知识实体</h2><p className="mt-1 text-sm text-slate-400">候选实体先入 PostgreSQL，发布后才进入运营状态。</p></div><button className="flex items-center gap-1 rounded-lg bg-cyan-400 px-3 py-2 text-sm text-slate-950" onClick={() => void createKnowledgeEntity(`售后实体-${Date.now()}`, 'policy').then(refresh)}><Plus size={15} />新增</button></div>
-        <div className="mt-4 space-y-2">{entities.map((entity) => <div className="flex items-center justify-between rounded-lg border border-slate-800 p-3" key={entity.id}><div className="flex items-center gap-3"><Database size={16} className="text-cyan-300" /><div><p className="text-sm">{entity.name}</p><p className="text-xs text-slate-500">{entity.entity_type}</p></div></div>{entity.status === 'candidate' ? <button className="text-xs text-cyan-300" onClick={() => void publishKnowledgeEntity(entity.id).then(refresh)}>发布</button> : <span className="text-xs text-emerald-300">已发布</span>}</div>)}</div>
-      </div>
-      <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5"><div className="flex items-center justify-between"><div><h2 className="font-semibold">评测数据集</h2><p className="mt-1 text-sm text-slate-400">数据集、用例和运行记录由后端保存。</p></div><button className="flex items-center gap-1 rounded-lg bg-cyan-400 px-3 py-2 text-sm text-slate-950" onClick={() => void createEvaluationDataset(`售后评测集-${Date.now()}`).then(refresh)}><Plus size={15} />新增</button></div><div className="mt-4 space-y-2">{datasets.map((dataset) => <div className="rounded-lg border border-slate-800 p-3" key={dataset.id}><p className="text-sm">{dataset.name}</p><p className="text-xs text-slate-500">{dataset.status}</p></div>)}</div><button className="mt-4 flex items-center gap-1 text-xs text-slate-400" onClick={() => void refresh()}><RefreshCw size={14} />刷新</button></div>
-      <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5 lg:col-span-2"><div className="flex items-center justify-between"><div><h2 className="font-semibold">关系投影</h2><p className="mt-1 text-sm text-slate-400">关系状态由 PostgreSQL 治理，发布后投影到 Neo4j。</p></div><GitBranch size={18} className="text-cyan-300" /></div><div className="mt-4 grid gap-2 md:grid-cols-2">{relations.map((relation) => <div className="rounded-lg border border-slate-800 p-3" key={relation.id}><p className="text-sm">{relation.relation_type}</p><p className="text-xs text-slate-500">{relation.source_entity_id.slice(0, 8)} → {relation.target_entity_id.slice(0, 8)} · {relation.status}</p></div>)}</div></div>
-      <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5 lg:col-span-2"><h2 className="font-semibold">评测评分</h2><div className="mt-4 flex flex-wrap gap-3">{datasets.map((dataset) => <button key={dataset.id} className="flex items-center gap-1 rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-300" onClick={() => void runDataset(dataset.id)}><Play size={14} />运行 {dataset.name}</button>)}</div>{scores.length ? <div className="mt-4 grid gap-2 md:grid-cols-3">{scores.map((score, index) => <div className="rounded-lg border border-slate-800 p-3" key={`${score.metric}-${index}`}><p className="text-xs text-slate-400">{score.metric}</p><p className="mt-1 text-xl font-semibold text-emerald-300">{score.value.toFixed(2)}</p></div>)}</div> : <p className="mt-4 text-sm text-slate-500">运行评测后显示评分。</p>}</div>
-      {error ? <p className="lg:col-span-2 text-sm text-rose-300">{error}</p> : null}
-    </section>
-  )
+  const publishedDocs = documents.filter((document) => document.status === 'published').length
+  const publishedEntities = entities.filter((entity) => entity.status === 'published').length
+  return <div className="workspace-page page-enter"><div className="page-heading"><div><p className="eyebrow">KNOWLEDGE OPERATIONS</p><h1>知识运营</h1><p>让知识从上传、解析、审核到发布，始终处于可见和可控状态。</p></div><Button tone="neutral" icon={<RefreshCw size={16} />} onClick={() => void refresh()}>刷新数据</Button></div><div className="metric-grid"><MetricTile label="已发布文档" value={publishedDocs} detail={`${documents.length} 个文档总量`} tone="accent" icon={<FileArchive size={16} />} /><MetricTile label="图谱实体" value={publishedEntities} detail={`${relations.length} 条关系`} tone="info" icon={<GitBranch size={16} />} /><MetricTile label="评测数据集" value={datasets.length} detail="可运行基准集" tone="success" icon={<Sparkles size={16} />} /></div>{error ? <ErrorState message={error} onRetry={() => void refresh()} /> : null}{loading ? <Panel><LoadingState label="正在同步知识运营数据" /></Panel> : <div className="operations-grid"><Panel className="document-panel"><PanelHeader eyebrow="KNOWLEDGE BASE" title="知识文档" description="原始文件进入 RustFS，解析任务由 MinerU Cloud Worker 处理。" action={<label className="upload-button"><FileUp size={15} />上传文档<input className="sr-only" type="file" accept=".md,.txt,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.html" onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadDocument(file) }} /></label>} />{uploadStatus ? <div className="success-banner"><Check size={15} />{uploadStatus}</div> : null}<div className="document-list">{documents.length === 0 ? <EmptyState icon={<FileArchive size={19} />} title="还没有知识文档" description="上传第一份售后政策或产品手册，开始构建可追溯知识。" /> : documents.map((document) => <div className="document-row" key={document.id}><div className="file-icon"><FileArchive size={17} /></div><div className="document-copy"><strong>{document.title}</strong><span>{document.versions.length} 个版本 · {document.current_version_id ? '已有当前版本' : '等待解析'}</span></div><div className="row-action">{document.status === 'published' ? <StatusPill tone="success">已发布</StatusPill> : <Button size="sm" tone="accent" onClick={() => void publishDocument(document.id)}>审核发布</Button>}</div></div>)}</div></Panel><Panel className="entity-panel"><PanelHeader eyebrow="GRAPH GOVERNANCE" title="知识图谱" description="实体和关系先治理，再投影到 Neo4j。" action={<Button size="sm" tone="neutral" icon={<Plus size={15} />} onClick={() => void createKnowledgeEntity(`售后实体-${Date.now()}`, 'policy').then(refresh)}>新增实体</Button>} /><div className="entity-list">{entities.length === 0 ? <EmptyState icon={<Database size={19} />} title="暂无图谱实体" description="实体候选将在知识处理后进入这里。" /> : entities.slice(0, 8).map((entity) => <div className="entity-row" key={entity.id}><span className="entity-token">{entity.entity_type.slice(0, 1).toUpperCase()}</span><div><strong>{entity.name}</strong><span>{entity.entity_type}</span></div>{entity.status === 'candidate' ? <button className="text-link" type="button" onClick={() => void publishEntity(entity.id)}>发布</button> : <StatusPill tone="success">已发布</StatusPill>}</div>)}</div></Panel><Panel className="relation-panel"><PanelHeader eyebrow="RELATION PROJECTION" title="关系投影" description="PostgreSQL 管理状态，发布后投影到 Neo4j。" action={<GitBranch size={18} className="muted-icon" />} />{relations.length === 0 ? <EmptyState icon={<GitBranch size={19} />} title="暂无关系" description="当前没有待展示的知识关系。" /> : <div className="relation-grid">{relations.slice(0, 10).map((relation) => <div className="relation-row" key={relation.id}><span>{relation.source_entity_id.slice(0, 8)}</span><GitBranch size={14} /><span>{relation.target_entity_id.slice(0, 8)}</span><StatusPill tone={relation.status === 'published' ? 'success' : 'warning'}>{relation.status}</StatusPill></div>)}</div>}</Panel><Panel className="evaluation-panel"><PanelHeader eyebrow="EVALUATION LAB" title="离线评测" description="用真实金标样例验证回答质量和引用稳定性。" />{datasets.length === 0 ? <EmptyState icon={<Sparkles size={19} />} title="暂无评测数据集" description="先创建一个最小评测集，再运行 Agent 质量基线。" action={<Button tone="accent" icon={<Plus size={15} />} onClick={() => void createEvaluationDataset(`售后评测集-${Date.now()}`).then(refresh)}>创建数据集</Button>} /> : <><div className="dataset-list">{datasets.map((dataset) => <div className="dataset-row" key={dataset.id}><div><strong>{dataset.name}</strong><span>{dataset.description || '售后场景质量基线'}</span></div><Button size="sm" tone="accent" disabled={runningDataset === dataset.id} icon={<Play size={14} />} onClick={() => void runDataset(dataset.id)}>{runningDataset === dataset.id ? '运行中…' : '运行评测'}</Button></div>)}</div>{scores.length > 0 ? <div className="score-grid">{scores.map((score, index) => <div className={cn('score-card', index === 0 && 'score-card-primary')} key={`${score.metric}-${index}`}><span>{score.metric}</span><strong>{score.value.toFixed(2)}</strong><small>{score.comment || '本次运行结果'}</small></div>)}</div> : <p className="panel-footnote">运行评测后，这里会展示准确性、引用一致性和安全门禁结果。</p>}</>}</Panel></div>}</div>
 }

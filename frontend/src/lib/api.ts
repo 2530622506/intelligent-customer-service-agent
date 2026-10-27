@@ -84,6 +84,14 @@ export async function resolveHandoff(taskId: string) {
   })
 }
 
+export async function requestHandoff(conversationId: string, reason: string, contextSnapshot: Record<string, unknown> = {}) {
+  return apiRequest<HandoffTaskView>(`/workflow/conversations/${conversationId}/handoff`, {
+    method: 'POST',
+    headers: { 'X-CSRF-Token': readCsrfToken() ?? '' },
+    body: JSON.stringify({ reason, risk_level: 'normal', context_snapshot: contextSnapshot }),
+  })
+}
+
 export interface MessageView {
   id: string
   turn_id: string

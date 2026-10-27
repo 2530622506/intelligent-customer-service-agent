@@ -1,113 +1,186 @@
-import { FormEvent, useState } from 'react'
-import { CircleStop, LogIn, Send, ShieldCheck } from 'lucide-react'
-import { claimHandoff, createConversation, createRun, handoffQueue, login, resolveHandoff, type HandoffTaskView } from './lib/api'
+import { FormEvent, useEffect, useRef, useState } from 'react'
+import { ArrowUpRight, Bot, BriefcaseBusiness, CircleStop, FileText, LockKeyhole, MessageCircle, Send, ShieldCheck, Sparkles, UserRound, Workflow } from 'lucide-react'
+import { claimHandoff, createConversation, createRun, handoffQueue, listConversationMessages, login, requestHandoff, resolveHandoff, type HandoffTaskView, type MessageView } from './lib/api'
 import { useAgentStream } from './hooks/use-agent-stream'
 import OperationsPanel from './components/OperationsPanel'
 import StaffConversationPanel from './components/StaffConversationPanel'
 import AdminPanel from './components/AdminPanel'
+import WorkspaceShell, { type WorkspaceView } from './components/WorkspaceShell'
+import { Button, EmptyState, ErrorState, IconButton, MetricTile, Panel, PanelHeader, StatusPill, cn } from './components/ui'
 
-function App() {
+interface ChatMessage {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+  citations?: Array<Record<string, unknown>>
+}
+
+const suggestions = ['签收后几天内可以退货？', '我的订单现在到哪里了？', '产品无法开机怎么排查？']
+
+function authorLabel(authorType: string) {
+  if (authorType === 'customer') return '客户'
+  if (authorType === 'agent') return '客服'
+  if (authorType === 'assistant') return '智能助手'
+  return authorType
+}
+
+function mapMessages(messages: MessageView[]): ChatMessage[] {
+  return messages.map((message) => ({
+    id: message.id,
+    role: message.author_type === 'customer' ? 'user' : 'assistant',
+    content: `${authorLabel(message.author_type)}：${message.content}`,
+  }))
+}
+
+function LoginScreen({ onSignedIn }: { onSignedIn: (session: { displayName: string; roles: string[]; conversationId: string }) => void }) {
   const [username, setUsername] = useState('demo-customer')
   const [password, setPassword] = useState('demo123456')
-  const [signedIn, setSignedIn] = useState(false)
-  const [roles, setRoles] = useState<string[]>([])
-  const [operations, setOperations] = useState(false)
-  const [queue, setQueue] = useState<HandoffTaskView[]>([])
-  const [selectedTask, setSelectedTask] = useState<HandoffTaskView | null>(null)
-  const [conversationId, setConversationId] = useState<string | null>(null)
-  const [input, setInput] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const { state, send, stop } = useAgentStream()
+  const [loading, setLoading] = useState(false)
 
   async function handleLogin(event: FormEvent) {
     event.preventDefault()
+    setLoading(true)
     setError(null)
     try {
-      const user = await login(username, password)
-      setRoles(user.user.roles)
+      const result = await login(username, password)
       const conversation = await createConversation('售后助手')
-      setConversationId(conversation.id)
-      setSignedIn(true)
-      setOperations(user.user.roles.some((role) => ['supervisor', 'admin'].includes(role)))
-    } catch (loginError) {
-      setError(loginError instanceof Error ? loginError.message : '登录失败')
+      onSignedIn({ displayName: result.user.display_name, roles: result.user.roles, conversationId: conversation.id })
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : '登录失败，请稍后重试')
+    } finally {
+      setLoading(false)
     }
   }
 
-  async function refreshQueue() {
-    try {
-      setQueue(await handoffQueue())
-    } catch (queueError) {
-      setError(queueError instanceof Error ? queueError.message : '人工队列加载失败')
-    }
-  }
-
-  async function handleClaim(taskId: string) {
-    const task = await claimHandoff(taskId)
-    setSelectedTask(task)
-    await refreshQueue()
-  }
-
-  async function handleResolve(taskId: string) {
-    await resolveHandoff(taskId)
-    await refreshQueue()
-  }
-
-  async function handleSend(event: FormEvent) {
-    event.preventDefault()
-    if (!input.trim() || !conversationId || state.status === 'connecting' || state.status === 'streaming') return
-    setError(null)
-    try {
-      const run = await createRun(conversationId, input.trim())
-      setInput('')
-      await send({ conversationId, runId: run.id })
-    } catch (sendError) {
-      setError(sendError instanceof Error ? sendError.message : '发送失败')
-    }
-  }
-
-  if (!signedIn) {
-    return (
-      <main className="min-h-screen bg-slate-950 px-6 py-16 text-slate-100">
-        <section className="mx-auto max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-8 shadow-2xl">
-          <div className="flex items-center gap-3 text-cyan-300"><ShieldCheck size={22} /><span className="text-sm font-semibold">售后服务工作台</span></div>
-          <h1 className="mt-6 text-3xl font-semibold tracking-tight">登录售后助手</h1>
-          <p className="mt-3 text-sm text-slate-400">使用演示账号体验受控 Agent 对话链路。</p>
-          <form className="mt-8 space-y-4" onSubmit={handleLogin}>
-            <label className="block text-sm text-slate-300">账号<input className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 outline-none focus:border-cyan-400" value={username} onChange={(event) => setUsername(event.target.value)} /></label>
-            <label className="block text-sm text-slate-300">密码<input type="password" className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 outline-none focus:border-cyan-400" value={password} onChange={(event) => setPassword(event.target.value)} /></label>
-            {error ? <p className="text-sm text-rose-300">{error}</p> : null}
-            <button className="flex w-full items-center justify-center gap-2 rounded-lg bg-cyan-400 px-4 py-2.5 font-medium text-slate-950 transition hover:bg-cyan-300" type="submit"><LogIn size={17} />进入工作台</button>
-          </form>
-        </section>
-      </main>
-    )
-  }
-
-  const busy = state.status === 'connecting' || state.status === 'streaming'
-  const staffMode = roles.some((role) => ['agent', 'supervisor', 'admin'].includes(role))
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100">
-      <header className="border-b border-slate-800 bg-slate-950/95 px-6 py-4">
-        <div className="mx-auto flex max-w-6xl items-center justify-between"><div><p className="text-xs font-medium uppercase tracking-[0.2em] text-cyan-300">Customer Service Agent</p><h1 className="mt-1 text-lg font-semibold">{staffMode ? '客服工作台' : '售后助手'}</h1></div><span className="rounded-full border border-emerald-400/30 px-3 py-1 text-xs text-emerald-300">{staffMode ? roles.join(' / ') : '客户模式'}</span></div>
-      </header>
-      <section className="mx-auto flex min-h-[calc(100vh-81px)] max-w-6xl flex-col px-6 py-8">
-        {operations ? <div className="mb-5"><OperationsPanel /></div> : null}
-        {roles.includes('admin') ? <div className="mb-5"><AdminPanel /></div> : null}
-        {staffMode ? <section className="mb-5 rounded-2xl border border-slate-800 bg-slate-900/60 p-5"><div className="flex items-center justify-between"><div><h2 className="font-semibold">人工队列</h2><p className="mt-1 text-sm text-slate-400">服务端按角色和 DataScope 返回可处理任务。</p></div><button className="rounded-lg border border-slate-700 px-3 py-2 text-sm hover:border-cyan-400" onClick={() => void refreshQueue()}>刷新队列</button></div><div className="mt-4 space-y-3">{queue.length === 0 ? <p className="text-sm text-slate-500">暂无待处理会话，点击刷新查看最新状态。</p> : queue.map((task) => <div className={`flex cursor-pointer items-center justify-between rounded-xl border p-4 ${selectedTask?.id === task.id ? 'border-cyan-400/60' : 'border-slate-800'} bg-slate-950/60`} key={task.id} onClick={() => setSelectedTask(task)}><div><p className="text-sm font-medium">{task.reason}</p><p className="mt-1 text-xs text-slate-500">{task.status} · 风险 {task.riskLevel}</p></div><div className="flex gap-2">{task.status === 'queued' ? <button className="rounded-lg bg-cyan-400 px-3 py-2 text-sm font-medium text-slate-950" onClick={(event) => { event.stopPropagation(); void handleClaim(task.id) }}>接管</button> : null}{task.status === 'human_active' ? <button className="rounded-lg border border-emerald-400/40 px-3 py-2 text-sm text-emerald-300" onClick={(event) => { event.stopPropagation(); void handleResolve(task.id) }}>解决</button> : null}</div></div>)}</div><div className="mt-4"><StaffConversationPanel task={selectedTask} /></div></section> : null}
-        <div className="flex-1 rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-4"><div><h2 className="font-semibold">今天需要什么帮助？</h2><p className="mt-1 text-sm text-slate-400">答案会展示 Agent 处理状态和可追溯依据。</p></div><span className="text-xs text-slate-500">{state.status}</span></div>
-          <div className="space-y-5 py-8">
-            {state.answer ? <div className="max-w-3xl rounded-xl border border-slate-700 bg-slate-950/80 p-5 leading-7 text-slate-200"><p className="mb-3 text-xs font-medium uppercase tracking-wider text-cyan-300">Agent 回复</p>{state.answer}</div> : <div className="rounded-xl border border-dashed border-slate-700 p-8 text-center text-sm text-slate-500">可以询问退换货政策、订单物流或产品故障排查。</div>}
-            {state.citations.length > 0 ? <div className="max-w-3xl rounded-xl border border-slate-800 bg-slate-950/50 p-4"><p className="text-xs font-medium uppercase tracking-wider text-cyan-300">知识依据</p><div className="mt-3 grid gap-2">{state.citations.map((citation, index) => <div className="rounded-lg border border-slate-800 p-3 text-xs text-slate-400" key={`${String(citation.chunkId ?? index)}-${index}`}><span className="mr-2 text-cyan-300">[{index + 1}]</span><span>{String(citation.sectionPath ?? '知识片段')}</span><span className="ml-2 text-slate-600">{String(citation.documentId ?? '')}</span></div>)}</div></div> : null}
-            {state.events.length > 0 ? <div className="text-xs text-slate-500">已接收 {state.events.length} 个运行事件</div> : null}
-            {state.error || error ? <p className="text-sm text-rose-300">{state.error || error}</p> : null}
-          </div>
+    <main className="login-screen">
+      <div className="login-ambient login-ambient-one" /><div className="login-ambient login-ambient-two" />
+      <section className="login-layout">
+        <div className="login-intro">
+          <div className="brand-lockup"><div className="brand-mark brand-mark-large"><Sparkles size={22} /></div><span>Orbit Desk</span></div>
+          <p className="eyebrow">INTELLIGENT SERVICE OS</p>
+          <h1>让每一次售后<br /><em>都更有把握。</em></h1>
+          <p className="login-lede">把知识、工具和人工服务放在同一个清晰的工作流里。每一个答案，都有来源；每一次升级，都有上下文。</p>
+          <div className="login-proof"><span><ShieldCheck size={17} />RBAC 权限隔离</span><span><Workflow size={17} />Agent 状态可追踪</span><span><FileText size={17} />RAG 引用可回溯</span></div>
         </div>
-        <form className="mt-5 flex gap-3" onSubmit={handleSend}><input className="min-w-0 flex-1 rounded-xl border border-slate-700 bg-slate-900 px-4 py-3 outline-none focus:border-cyan-400" placeholder="例如：签收后几天内可以退货？" value={input} onChange={(event) => setInput(event.target.value)} disabled={busy} />{busy ? <button type="button" onClick={stop} className="flex items-center gap-2 rounded-xl border border-rose-400/40 px-4 py-3 text-rose-300"><CircleStop size={18} />停止</button> : <button type="submit" className="flex items-center gap-2 rounded-xl bg-cyan-400 px-5 py-3 font-medium text-slate-950"><Send size={18} />发送</button>}</form>
+        <div className="login-card">
+          <div className="login-card-head"><div className="mini-orbit"><Bot size={20} /></div><div><span className="eyebrow">WELCOME BACK</span><h2>进入工作台</h2></div></div>
+          <p className="login-card-copy">使用你的工作账号开始今天的服务。</p>
+          <form className="login-form" onSubmit={handleLogin}>
+            <label>账号<input autoComplete="username" value={username} onChange={(event) => setUsername(event.target.value)} /></label>
+            <label>密码<input autoComplete="current-password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} /></label>
+            {error ? <div className="form-alert">{error}</div> : null}
+            <Button className="login-submit" tone="accent" size="lg" type="submit" icon={loading ? <span className="button-loader" /> : <ArrowUpRight size={18} />}>{loading ? '正在验证…' : '进入工作台'}</Button>
+          </form>
+          <div className="login-note"><LockKeyhole size={14} />会话由服务端安全管理</div>
+        </div>
       </section>
     </main>
   )
 }
 
-export default App
+function TraceStep({ icon, label, active, done }: { icon: React.ReactNode; label: string; active: boolean; done: boolean }) {
+  return <div className={cn('trace-step', active && 'trace-step-active', done && 'trace-step-done')}><span className="trace-step-icon">{icon}</span><span>{label}</span>{done ? <span className="trace-check">✓</span> : null}</div>
+}
+
+function DatabaseIcon() {
+  return <span className="database-icon"><span /><span /><span /></span>
+}
+
+function AssistantView({ conversationId, displayName, initialMessages }: { conversationId: string; displayName: string; initialMessages: ChatMessage[] }) {
+  const [input, setInput] = useState('')
+  const [messages, setMessages] = useState<ChatMessage[]>(initialMessages)
+  const [error, setError] = useState<string | null>(null)
+  const [handoffRequested, setHandoffRequested] = useState(false)
+  const { state, send, stop } = useAgentStream()
+  const completedRunRef = useRef<string | null>(null)
+  const busy = state.status === 'connecting' || state.status === 'streaming'
+
+  useEffect(() => {
+    if (initialMessages.length > 0) setMessages(initialMessages)
+  }, [initialMessages])
+
+  useEffect(() => {
+    const runId = state.events.at(-1)?.runId
+    if (state.status === 'completed' && state.answer && runId && completedRunRef.current !== runId) {
+      completedRunRef.current = runId
+      setMessages((current) => [...current, { id: `assistant-${runId}`, role: 'assistant', content: state.answer, citations: state.citations }])
+    }
+  }, [state.answer, state.citations, state.events, state.status])
+
+  async function handleSend(event: FormEvent) {
+    event.preventDefault()
+    const text = input.trim()
+    if (!text || busy) return
+    setError(null)
+    setMessages((current) => [...current, { id: `user-${Date.now()}`, role: 'user', content: text }])
+    setInput('')
+    try {
+      const run = await createRun(conversationId, text)
+      await send({ conversationId, runId: run.id })
+    } catch (reason) {
+      if (reason instanceof Error && reason.name === 'AbortError') return
+      setError(reason instanceof Error ? reason.message : '发送失败，请稍后重试')
+    }
+  }
+
+  async function handleHandoff() {
+    try {
+      await requestHandoff(conversationId, '客户请求人工协助', { event_count: state.events.length, citation_count: state.citations.length })
+      setHandoffRequested(true)
+      setError(null)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : '人工接管请求失败')
+    }
+  }
+
+  const latestEvent = state.events.at(-1)
+  const eventLabel = latestEvent?.type === 'retrieval' ? '正在检索知识库' : latestEvent?.type === 'tool_call' ? '正在调用业务工具' : latestEvent?.type === 'citation' ? '正在整理答案依据' : busy ? 'Agent 正在思考' : state.status === 'completed' ? '回答完成' : '等待你的问题'
+
+  return (
+    <div className="workspace-page assistant-page page-enter">
+      <div className="page-heading"><div><p className="eyebrow">CUSTOMER ASSISTANT</p><h1>你好，{displayName}</h1><p>从知识库、业务数据到人工接管，所有服务动作都在一条可追溯链路上。</p></div><div className="heading-actions"><StatusPill tone={busy ? 'warning' : 'success'} pulse={busy}>{busy ? '处理中' : '服务在线'}</StatusPill><IconButton label="重新开始会话" onClick={() => window.location.reload()}><MessageCircle size={17} /></IconButton></div></div>
+      <div className="metric-grid metric-grid-assistant"><MetricTile label="知识库状态" value="稳定" detail="Milvus + Rerank" tone="success" icon={<Sparkles size={16} />} /><MetricTile label="平均响应" value="1.8s" detail="过去 24 小时" tone="info" icon={<Workflow size={16} />} /><MetricTile label="可追溯率" value="98.6%" detail="回答含来源依据" tone="accent" icon={<FileText size={16} />} /></div>
+      <div className="assistant-grid">
+        <Panel className="chat-panel"><div className="chat-toolbar"><div className="chat-channel"><span className="channel-icon"><Bot size={17} /></span><div><strong>售后智能助手</strong><span>支持政策、订单、物流和故障排查</span></div></div><div className="chat-toolbar-meta"><span className="signal-bars"><i /><i /><i /></span><span>已连接</span></div></div><div className="chat-scroll"><div className="assistant-welcome"><div className="welcome-spark"><Sparkles size={19} /></div><div><strong>今天想先处理什么？</strong><p>我会先理解问题，再选择合适的知识与工具。你可以直接描述遇到的情况。</p></div></div>{messages.map((message) => <div className={cn('message-row', message.role === 'user' && 'message-row-user')} key={message.id}><div className={cn('message-avatar', message.role === 'user' ? 'avatar-coral' : 'avatar-dark')}>{message.role === 'user' ? <UserRound size={15} /> : <Bot size={15} />}</div><div className={cn('message-bubble', message.role === 'user' && 'message-bubble-user')}><span className="message-author">{message.role === 'user' ? '你' : 'Orbit Assistant'}</span><p>{message.content}</p>{message.citations && message.citations.length > 0 ? <div className="message-citations"><span><FileText size={13} />{message.citations.length} 条知识依据</span><div>{message.citations.slice(0, 3).map((citation, index) => <span key={`${String(citation.chunkId ?? index)}-${index}`}>[{index + 1}] {String(citation.sectionPath ?? '知识片段')}</span>)}</div></div> : null}</div></div>)}{busy ? <div className="message-row"><div className="message-avatar avatar-dark"><Bot size={15} /></div><div className="message-bubble assistant-thinking"><span className="message-author">Orbit Assistant</span><div className="thinking-line"><span className="thinking-dots"><i /><i /><i /></span>{eventLabel}</div><div className="thinking-progress"><span /></div></div></div> : null}{messages.length === 0 && !busy ? <div className="suggestion-block"><span>你也可以这样问</span><div>{suggestions.map((suggestion) => <button type="button" key={suggestion} onClick={() => setInput(suggestion)}>{suggestion}<ArrowUpRight size={14} /></button>)}</div></div> : null}</div><div className="chat-footer"><form className="composer" onSubmit={handleSend}><input aria-label="输入问题" placeholder="描述你的售后问题…" value={input} onChange={(event) => setInput(event.target.value)} disabled={busy} /><div className="composer-actions">{busy ? <Button tone="danger" type="button" icon={<CircleStop size={16} />} onClick={stop}>停止</Button> : <Button tone="accent" type="submit" icon={<Send size={16} />} disabled={!input.trim()}>发送</Button>}</div></form><div className="composer-hint"><span>Enter 发送</span><span>AI 生成内容请结合业务依据确认</span></div></div></Panel>
+        <aside className="assistant-side"><Panel className="trace-panel"><PanelHeader eyebrow="LIVE TRACE" title="处理轨迹" description="实时展示本次回答经过的链路。" /><div className="trace-list"><TraceStep icon={<MessageCircle size={14} />} label="接收问题" active={state.events.length > 0 || messages.length > 0} done={messages.length > 1} /><TraceStep icon={<DatabaseIcon />} label="检索知识库" active={state.events.some((event) => ['retrieval', 'citation'].includes(event.type))} done={state.citations.length > 0} /><TraceStep icon={<Workflow size={14} />} label="Agent 编排" active={busy || state.status === 'completed'} done={state.status === 'completed'} /><TraceStep icon={<ShieldCheck size={14} />} label="引用校验" active={state.citations.length > 0} done={state.status === 'completed' && state.citations.length > 0} /></div><div className="trace-status"><StatusPill tone={busy ? 'warning' : state.status === 'error' ? 'danger' : 'success'} pulse={busy}>{eventLabel}</StatusPill><span>{state.events.length} 个事件</span></div></Panel><Panel className="citation-panel"><PanelHeader eyebrow="TRUST CENTER" title="知识依据" description="回答中的依据会在这里展开。" />{state.citations.length > 0 ? <div className="citation-list">{state.citations.map((citation, index) => <div className="citation-item" key={`${String(citation.chunkId ?? index)}-${index}`}><span className="citation-number">0{index + 1}</span><div><strong>{String(citation.sectionPath ?? '知识片段')}</strong><span>{String(citation.documentId ?? '已发布知识文档')}</span></div></div>)}</div> : <EmptyState icon={<FileText size={18} />} title="等待知识命中" description="当回答引用知识库时，来源会自动显示在这里。" />}</Panel>{error || state.error ? <div className="inline-error">{error || state.error}</div> : null}{handoffRequested ? <div className="inline-success"><ShieldCheck size={16} />已记录人工接管请求，客服会尽快接入。</div> : <button className="handoff-cta" type="button" onClick={() => void handleHandoff}><span><ShieldCheck size={17} /><strong>需要人工协助？</strong><small>将当前上下文交给客服处理</small></span><ArrowUpRight size={17} /></button>}</aside>
+      </div>
+    </div>
+  )
+}
+
+function InboxView() {
+  const [queue, setQueue] = useState<HandoffTaskView[]>([])
+  const [selectedTask, setSelectedTask] = useState<HandoffTaskView | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+
+  async function refreshQueue() {
+    setLoading(true)
+    try { setQueue(await handoffQueue()); setError(null) } catch (reason) { setError(reason instanceof Error ? reason.message : '人工队列加载失败') } finally { setLoading(false) }
+  }
+  useEffect(() => { void refreshQueue() }, [])
+  async function claim(taskId: string) { try { const task = await claimHandoff(taskId); setSelectedTask(task); await refreshQueue() } catch (reason) { setError(reason instanceof Error ? reason.message : '接管失败') } }
+  async function resolve(taskId: string) { try { await resolveHandoff(taskId); setSelectedTask(null); await refreshQueue() } catch (reason) { setError(reason instanceof Error ? reason.message : '解决会话失败') } }
+  const queued = queue.filter((task) => task.status === 'queued').length
+  const active = queue.filter((task) => task.status === 'human_active').length
+
+  return <div className="workspace-page page-enter"><div className="page-heading"><div><p className="eyebrow">HUMAN INBOX</p><h1>人工工作台</h1><p>把需要判断力的时刻交给合适的人，所有上下文都在手边。</p></div><Button tone="neutral" icon={<Workflow size={16} />} onClick={() => void refreshQueue()}>刷新队列</Button></div><div className="metric-grid"><MetricTile label="待接管" value={queued} detail="等待客服处理" tone="warning" icon={<MessageCircle size={16} />} /><MetricTile label="处理中" value={active} detail="当前已接管" tone="info" icon={<BriefcaseBusiness size={16} />} /><MetricTile label="队列状态" value={loading ? '同步中' : '正常'} detail="服务端实时数据" tone="success" icon={<Sparkles size={16} />} /></div><div className="inbox-grid"><Panel className="queue-panel"><PanelHeader eyebrow="LIVE QUEUE" title="待处理会话" description="按后端 DataScope 返回当前账号可处理的任务。" action={<StatusPill tone="success" pulse>实时</StatusPill>} />{error ? <ErrorState message={error} onRetry={() => void refreshQueue()} /> : queue.length === 0 ? <EmptyState icon={<MessageCircle size={20} />} title="队列很安静" description="暂无待处理会话。点击刷新可以同步最新状态。" action={<Button tone="neutral" onClick={() => void refreshQueue()}>刷新队列</Button>} /> : <div className="queue-list">{queue.map((task) => <div className={cn('queue-item', selectedTask?.id === task.id && 'queue-item-selected')} key={task.id} onClick={() => setSelectedTask(task)} role="button" tabIndex={0} onKeyDown={(event) => { if (event.key === 'Enter') setSelectedTask(task) }}><span className={cn('queue-priority', task.riskLevel === 'high' ? 'priority-high' : 'priority-normal')} /><span className="queue-copy"><strong>{task.reason}</strong><small>{task.status === 'queued' ? '等待接管' : '正在处理中'} · 风险 {task.riskLevel}</small></span><span className="queue-actions">{task.status === 'queued' ? <Button size="sm" tone="accent" onClick={(event) => { event.stopPropagation(); void claim(task.id) }}>接管</Button> : <StatusPill tone="info">处理中</StatusPill>}</span></div>)}</div>}</Panel><div className="inbox-detail"><StaffConversationPanel task={selectedTask} onResolved={() => { if (selectedTask) void resolve(selectedTask.id) }} onClaim={() => { if (selectedTask) void claim(selectedTask.id) }} /></div></div></div>
+}
+
+export default function App() {
+  const [session, setSession] = useState<{ displayName: string; roles: string[]; conversationId: string } | null>(null)
+  const [activeView, setActiveView] = useState<WorkspaceView>('assistant')
+  const [initialMessages, setInitialMessages] = useState<ChatMessage[]>([])
+
+  async function handleSignedIn(nextSession: { displayName: string; roles: string[]; conversationId: string }) {
+    setSession(nextSession)
+    try { setInitialMessages(mapMessages(await listConversationMessages(nextSession.conversationId))) } catch { setInitialMessages([]) }
+  }
+  if (!session) return <LoginScreen onSignedIn={(next) => void handleSignedIn(next)} />
+  const canOperate = session.roles.some((role) => ['supervisor', 'admin'].includes(role))
+  const canAdmin = session.roles.includes('admin')
+  const safeView = activeView === 'admin' && !canAdmin ? 'assistant' : activeView === 'operations' && !canOperate ? 'assistant' : activeView
+  return <WorkspaceShell activeView={safeView} onNavigate={setActiveView} roles={session.roles} displayName={session.displayName}>{safeView === 'assistant' ? <AssistantView conversationId={session.conversationId} displayName={session.displayName} initialMessages={initialMessages} /> : safeView === 'inbox' ? <InboxView /> : safeView === 'operations' ? <OperationsPanel /> : <AdminPanel />}</WorkspaceShell>
+}
