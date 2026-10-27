@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import httpx
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 from pydantic import SecretStr
@@ -17,8 +18,13 @@ class QwenSupervisorPlanner:
             model=settings.chat_model,
             temperature=0,
             timeout=settings.chat_timeout_seconds,
-            max_retries=1,
+            max_retries=0,
             base_url=settings.chat_base_url,
+            use_responses_api=False,
+            http_client=httpx.Client(
+                trust_env=settings.model_http_trust_env,
+                timeout=settings.chat_timeout_seconds,
+            ),
         ).with_structured_output(AgentPlan)
 
     def plan(self, question: str) -> AgentPlan:

@@ -50,7 +50,11 @@ class PolicyRAGService:
             answer = await self._generate(question, selected)
             return RAGAnswer(answer, [self._citation(hit) for hit in selected], True)
         except (ProviderError, httpx.HTTPError, OSError, TimeoutError) as error:
-            logger.warning("RAG provider unavailable, falling back to agent response: %s", type(error).__name__)
+            logger.warning(
+                "RAG provider unavailable, falling back to agent response: %s: %s",
+                type(error).__name__,
+                str(error)[:240],
+            )
             return None
         except Exception as error:  # noqa: BLE001  # Milvus SDK 的异常类型跨版本不稳定，必须显式降级。
             logger.warning("RAG service unavailable, falling back to agent response: %s", type(error).__name__)
@@ -65,8 +69,13 @@ class PolicyRAGService:
             model=self.settings.chat_model,
             temperature=0,
             timeout=self.settings.chat_timeout_seconds,
-            max_retries=1,
+            max_retries=0,
             base_url=self.settings.chat_base_url,
+            use_responses_api=False,
+            http_async_client=httpx.AsyncClient(
+                timeout=self.settings.chat_timeout_seconds,
+                trust_env=self.settings.model_http_trust_env,
+            ),
         )
         response = await model.ainvoke(
             [

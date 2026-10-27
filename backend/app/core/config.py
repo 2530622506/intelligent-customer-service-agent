@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     chat_base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
     chat_model: str = "qwen3.7-flash"
     chat_timeout_seconds: float = 30.0
+    model_http_trust_env: bool = False
     langfuse_enabled: bool = True
     langfuse_public_key: str = ""
     langfuse_secret_key: str = ""
@@ -51,7 +52,7 @@ class Settings(BaseSettings):
     mineru_poll_interval_ms: int = 3000
     mineru_poll_timeout_ms: int = 600000
     embedding_api_key: str = ""
-    embedding_base_url: str = "https://dashscope.aliyuncs.com/api/v1/services/embeddings/text-embedding/text-embedding"
+    embedding_base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
     embedding_model: str = "qwen3.7-text-embedding"
     embedding_dimension: int = 1024
     rerank_enabled: bool = True

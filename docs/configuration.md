@@ -34,7 +34,9 @@ EVAL_FILTER=
 EVAL_USER_ID=eval-admin
 ```
 
-`OPENAI_API_KEY` 和 `OPENAI_BASE_URL` 会自动映射到当前的 DashScope-compatible chat 配置；当没有单独填写 `EMBEDDING_API_KEY` / `RERANK_API_KEY` 时，会复用该 key。Compose 开发配置默认使用宿主机 `7897` 代理访问外部模型服务，内部 PostgreSQL、Milvus 等容器域名不走代理。
+`OPENAI_API_KEY` 和 `OPENAI_BASE_URL` 会自动映射到当前的 DashScope-compatible chat 配置；当没有单独填写 `EMBEDDING_API_KEY` / `RERANK_API_KEY` 时，会复用该 key。Embedding 默认使用 OpenAI-compatible `/embeddings`，与 `knowledge-hub` 的调用方式一致。
+
+本地开发时建议使用 `scripts/run-host-api.sh` 在宿主机启动 API，Docker 只运行基础设施。这样模型请求不会经过 Docker 的外部 TLS / 代理路径；前端 Nginx 会把 `/api` 转发到宿主机 `8001`。
 
 Embedding uses the DashScope native API with `text_type=document` for document vectors and `text_type=query` for query vectors. Reranker uses DashScope Text Rerank API and falls back to RRF when the service is unavailable.
 

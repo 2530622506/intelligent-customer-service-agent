@@ -39,6 +39,17 @@ docs/          API、数据模型、运行和评测说明
 scripts/       初始化、健康检查和评测脚本
 ```
 
+## 本地模型运行方式
+
+本地开发默认让 Docker 只运行 PostgreSQL、Milvus、Neo4j、Redis、RabbitMQ、RustFS 和 Worker；Python API 在宿主机运行，以便直接访问 DashScope-compatible 模型服务。先启动基础设施，再运行：
+
+```bash
+docker compose -f infra/docker-compose.yml up -d postgres redis rabbitmq milvus-etcd milvus neo4j rustfs worker
+./scripts/run-host-api.sh
+```
+
+前端地址仍为 `http://127.0.0.1:55173`，Nginx 会把 `/api` 代理到宿主机 API `8001`。模型 key 从项目根目录未提交的 `.env` 读取。
+
 ## 技术基线
 
 - FastAPI、Pydantic 2、SQLAlchemy 2 Async、asyncpg、Alembic
