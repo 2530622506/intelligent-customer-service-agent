@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Database, FileUp, GitBranch, Play, Plus, RefreshCw } from 'lucide-react'
+import { Database, FileUp, FileText, GitBranch, Play, Plus, RefreshCw } from 'lucide-react'
 import {
   createEvaluationDataset,
   createEvaluationRun,
@@ -7,17 +7,21 @@ import {
   executeEvaluationRun,
   listEvaluationDatasets,
   listEvaluationScores,
+  listKnowledgeDocuments,
   listKnowledgeEntities,
   listKnowledgeRelations,
+  publishKnowledgeDocument,
   publishKnowledgeEntity,
   uploadKnowledgeDocument,
   type EvaluationDatasetView,
+  type KnowledgeDocumentView,
   type KnowledgeEntityView,
   type KnowledgeRelationView,
 } from '../lib/api'
 
 export default function OperationsPanel() {
   const [entities, setEntities] = useState<KnowledgeEntityView[]>([])
+  const [documents, setDocuments] = useState<KnowledgeDocumentView[]>([])
   const [datasets, setDatasets] = useState<EvaluationDatasetView[]>([])
   const [relations, setRelations] = useState<KnowledgeRelationView[]>([])
   const [scores, setScores] = useState<Array<{ metric: string; value: number; comment: string | null }>>([])
@@ -26,7 +30,8 @@ export default function OperationsPanel() {
 
   async function refresh() {
     try {
-      const [nextEntities, nextDatasets, nextRelations] = await Promise.all([listKnowledgeEntities(), listEvaluationDatasets(), listKnowledgeRelations()])
+      const [nextDocuments, nextEntities, nextDatasets, nextRelations] = await Promise.all([listKnowledgeDocuments(), listKnowledgeEntities(), listEvaluationDatasets(), listKnowledgeRelations()])
+      setDocuments(nextDocuments)
       setEntities(nextEntities)
       setDatasets(nextDatasets)
       setRelations(nextRelations)
@@ -55,7 +60,7 @@ export default function OperationsPanel() {
 
   return (
     <section className="grid gap-5 lg:grid-cols-2">
-      <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5 lg:col-span-2"><div className="flex items-center gap-3"><FileUp size={18} className="text-cyan-300" /><div><h2 className="font-semibold">知识文档</h2><p className="mt-1 text-sm text-slate-400">原始文件进入 RustFS，解析任务由 MinerU Cloud Worker 处理。</p></div></div><label className="mt-4 flex cursor-pointer items-center justify-center rounded-xl border border-dashed border-slate-700 px-4 py-6 text-sm text-slate-400 hover:border-cyan-400"><input className="sr-only" type="file" accept=".md,.txt,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.html" onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadDocument(file) }} />选择文档上传</label>{uploadStatus ? <p className="mt-3 text-xs text-emerald-300">{uploadStatus}</p> : null}</div>
+      <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5 lg:col-span-2"><div className="flex items-center gap-3"><FileUp size={18} className="text-cyan-300" /><div><h2 className="font-semibold">知识文档</h2><p className="mt-1 text-sm text-slate-400">原始文件进入 RustFS，解析任务由 MinerU Cloud Worker 处理。</p></div></div><label className="mt-4 flex cursor-pointer items-center justify-center rounded-xl border border-dashed border-slate-700 px-4 py-6 text-sm text-slate-400 hover:border-cyan-400"><input className="sr-only" type="file" accept=".md,.txt,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.html" onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadDocument(file) }} />选择文档上传</label>{uploadStatus ? <p className="mt-3 text-xs text-emerald-300">{uploadStatus}</p> : null}<div className="mt-4 space-y-2">{documents.map((document) => <div className="flex items-center justify-between rounded-lg border border-slate-800 p-3" key={document.id}><div className="flex items-center gap-3"><FileText size={16} className="text-cyan-300" /><div><p className="text-sm">{document.title}</p><p className="text-xs text-slate-500">{document.status} · {document.versions.length} 个版本</p></div></div>{document.status === 'published' ? <span className="text-xs text-emerald-300">已发布</span> : <button className="text-xs text-cyan-300" onClick={() => void publishKnowledgeDocument(document.id).then(refresh)}>审核并发布</button>}</div>)}</div></div>
       <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
         <div className="flex items-center justify-between"><div><h2 className="font-semibold">知识实体</h2><p className="mt-1 text-sm text-slate-400">候选实体先入 PostgreSQL，发布后才进入运营状态。</p></div><button className="flex items-center gap-1 rounded-lg bg-cyan-400 px-3 py-2 text-sm text-slate-950" onClick={() => void createKnowledgeEntity(`售后实体-${Date.now()}`, 'policy').then(refresh)}><Plus size={15} />新增</button></div>
         <div className="mt-4 space-y-2">{entities.map((entity) => <div className="flex items-center justify-between rounded-lg border border-slate-800 p-3" key={entity.id}><div className="flex items-center gap-3"><Database size={16} className="text-cyan-300" /><div><p className="text-sm">{entity.name}</p><p className="text-xs text-slate-500">{entity.entity_type}</p></div></div>{entity.status === 'candidate' ? <button className="text-xs text-cyan-300" onClick={() => void publishKnowledgeEntity(entity.id).then(refresh)}>发布</button> : <span className="text-xs text-emerald-300">已发布</span>}</div>)}</div>

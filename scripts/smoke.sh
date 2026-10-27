@@ -36,6 +36,7 @@ RUN_ID=$(printf '%s' "$RUN" | python3 -c 'import json,sys; print(json.load(sys.s
 # SSE smoke 只检查关键事件，完整断线恢复由接口集成测试覆盖。
 STREAM=$(curl -fsS -N -X POST -b "$COOKIE_FILE" \
   -H 'Accept: text/event-stream' \
+  -H "X-CSRF-Token: $CSRF" \
   "$API_BASE/conversations/$CONVERSATION_ID/runs/$RUN_ID/stream")
 printf '%s' "$STREAM" | rg -q 'event: run_started'
 printf '%s' "$STREAM" | rg -q 'event: done'

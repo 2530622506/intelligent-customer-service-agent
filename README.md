@@ -4,7 +4,17 @@
 
 ## 当前状态
 
-项目处于规划和工程初始化阶段，暂未开始业务代码实现。
+项目已完成后端核心链路和前端基础工作台，当前处于发布门禁收尾阶段。
+
+已具备：
+
+- FastAPI + LangGraph 受控 Agent Runtime、5 类业务 Agent、REST + SSE。
+- PostgreSQL、Milvus Dense / BM25、Neo4j、RustFS、Redis、RabbitMQ 的本地 Compose 环境。
+- 文档上传、MinerU Cloud 解析、版本治理、索引前发布和引用回溯。
+- RBAC、DataScope、人工接管、审批、幂等、高风险动作模拟和离线评测。
+- 客服工作台、知识运营台、图谱实体 / 关系审核和管理员 RBAC 配置台。
+
+当前仍需完成正式发布前的浏览器级 SSE 断线回归、完整安全门禁报告和干净环境演示脚本。
 
 规划文档位于上级 Trellis task：
 

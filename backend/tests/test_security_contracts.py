@@ -17,7 +17,8 @@ def test_sensitive_write_endpoints_do_not_accept_unauthenticated_requests() -> N
         ("/api/v1/conversations", {"title": "x"}),
         ("/api/v1/evaluations/datasets", {"name": "x"}),
         ("/api/v1/knowledge/entities", {"name": "x", "entity_type": "policy"}),
+        ("/api/v1/knowledge/documents/upload", None),
     ]
     for endpoint, body in endpoints:
-        response = client.post(endpoint, json=body)
+        response = client.post(endpoint, json=body) if body is not None else client.post(endpoint)
         assert response.status_code in {401, 403}, endpoint

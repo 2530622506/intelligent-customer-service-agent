@@ -5,6 +5,7 @@ from typing import Any
 
 import aio_pika
 from aio_pika import DeliveryMode, ExchangeType, Message
+from aio_pika.abc import AbstractIncomingMessage
 
 from app.core.config import Settings
 
@@ -40,7 +41,7 @@ class RabbitPublisher:
             await connection.close()
 
 
-def parse_task_id(message: aio_pika.IncomingMessage) -> str:
+def parse_task_id(message: AbstractIncomingMessage) -> str:
     payload: dict[str, Any] = json.loads(message.body.decode("utf-8"))
     task_id = payload.get("taskId")
     if not isinstance(task_id, str) or not task_id:

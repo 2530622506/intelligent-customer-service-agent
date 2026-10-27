@@ -115,6 +115,33 @@ export async function uploadKnowledgeDocument(file: File) {
   return response.json() as Promise<{ taskId: string; documentId: string; status: string }>
 }
 
+export interface KnowledgeDocumentVersionView {
+  id: string
+  version_number: number
+  status: string
+  parser_version: string
+  content_hash: string
+}
+
+export interface KnowledgeDocumentView {
+  id: string
+  title: string
+  status: string
+  current_version_id: string | null
+  versions: KnowledgeDocumentVersionView[]
+}
+
+export async function listKnowledgeDocuments() {
+  return apiRequest<KnowledgeDocumentView[]>('/knowledge/documents')
+}
+
+export async function publishKnowledgeDocument(id: string) {
+  return apiRequest<KnowledgeDocumentView>(`/knowledge/documents/${id}/publish`, {
+    method: 'POST',
+    headers: { 'X-CSRF-Token': readCsrfToken() ?? '' },
+  })
+}
+
 export interface KnowledgeEntityView {
   id: string
   name: string

@@ -7,6 +7,9 @@ def test_knowledge_graph_routes_are_registered() -> None:
     paths = set(app.openapi()["paths"])
     assert "/api/v1/knowledge/entities" in paths
     assert "/api/v1/knowledge/relations" in paths
+    assert "/api/v1/knowledge/entities/{entity_id}/sources" in paths
+    assert "/api/v1/knowledge/entities/{entity_id}/merge" in paths
+    assert "/api/v1/knowledge/relations/{relation_id}" in paths
 
 
 def test_knowledge_graph_write_requires_authentication() -> None:
